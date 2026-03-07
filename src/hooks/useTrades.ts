@@ -107,16 +107,16 @@ export function useTrades(symbol: string, largeNotional = 10000) {
     if (!symbol) return;
     console.debug('[useTrades] effect mount for', symbol);
     wsService.addHandler(handleMessage);
-    // subscribe to both known variants; some servers use "trade" or "trades"
+    // subscribe to all trade-related channels for this symbol
     wsService.subscribe('all_trades', symbol);
     wsService.subscribe('trade', symbol);
-    wsService.subscribe('trades', symbol as any); // cast to satisfy Channel type
+    wsService.subscribe('trades' as any, symbol);
     return () => {
       console.debug('[useTrades] cleanup for', symbol);
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('all_trades', symbol);
       wsService.unsubscribe('trade', symbol);
-      wsService.unsubscribe('trades', symbol as any);
+      wsService.unsubscribe('trades' as any, symbol);
       setAggTrades([]);
       tradesWindow.current = [];
     };
