@@ -5,6 +5,12 @@
   position: relative;
 }
 
+h2 {
+  margin: 4px 8px;
+  font-size: 14px;
+  color: #fff;
+}
+
 .main-panel {
   flex: 1;
   display: flex;

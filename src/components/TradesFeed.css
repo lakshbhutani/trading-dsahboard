@@ -1,6 +1,43 @@
 .trades-feed {
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.trades-controls {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 4px;
+  background: #181a1f;
+  color: #fff;
+  font-size: 12px;
+}
+
+.trades-list {
+  flex: 1;
   overflow-y: auto;
+}
+
+.trades-list tr {
+  transition: background-color 0.3s;
+}
+
+.trades-list tr.large {
+  background-color: rgba(255, 235, 59, 0.3);
+  font-weight: bold;
+}
+
+.jump-btn {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  padding: 4px 8px;
+  background: #4caf50;
+  color: #000;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .trades-feed table {

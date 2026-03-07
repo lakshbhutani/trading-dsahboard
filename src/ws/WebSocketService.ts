@@ -18,15 +18,27 @@ class WebSocketService {
 
   connect(url: string) {
     if (this.socket) return;
+    this.url = url;
     this.socket = new WebSocket(url);
     this.socket.onopen = () => {
       this.reconnectAttempts = 0;
       this.notifyStatus('connected');
-      this.send({ op: 'ping' });
-      this.subs.forEach((s) => this.send({ op: 'subscribe', channel: s.channel, symbol: s.symbol }));
+      // re‑subscribe existing
+      this.subs.forEach((s) => {
+        if (s.channel && s.symbol) {
+          this.sendSubscribe(s.channel, [s.symbol]);
+        } else if (s.channel) {
+          this.sendSubscribe(s.channel);
+        }
+      });
     };
     this.socket.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
+      let msg: any;
+      try {
+        msg = JSON.parse(ev.data);
+      } catch {
+        return;
+      }
       this.handlers.forEach((h) => h(msg));
     };
     this.socket.onclose = () => {
@@ -35,7 +47,7 @@ class WebSocketService {
       this.reconnect();
     };
     this.socket.onerror = () => {
-      // short circuit; will close eventually
+      // errors are handled in close
     };
   }
 
@@ -44,7 +56,7 @@ class WebSocketService {
     const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
     setTimeout(() => {
       this.reconnectAttempts++;
-      this.connect(this.url!);
+      if (this.url) this.connect(this.url);
     }, delay);
   }
 
@@ -54,21 +66,46 @@ class WebSocketService {
   }
 
   subscribe(channel: Channel, symbol?: string) {
-    this.subs.push({ channel, symbol });
+    // track subscription state
+    const existing = this.subs.find((s) => s.channel === channel && s.symbol === symbol);
+    if (!existing) {
+      this.subs.push({ channel, symbol });
+    }
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.send({ op: 'subscribe', channel, symbol });
+      if (symbol) this.sendSubscribe(channel, [symbol]);
+      else this.sendSubscribe(channel);
     }
   }
 
   unsubscribe(channel: Channel, symbol?: string) {
     this.subs = this.subs.filter((s) => !(s.channel === channel && s.symbol === symbol));
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.send({ op: 'unsubscribe', channel, symbol });
+      if (symbol) this.sendUnsubscribe(channel, [symbol]);
+      else this.sendUnsubscribe(channel);
     }
+  }
+
+  private sendSubscribe(channel: Channel, symbols: string[] = []) {
+    const payload: any = { channels: [{ name: channel }] };
+    if (symbols.length) payload.channels[0].symbols = symbols;
+    this.send({ type: 'subscribe', payload });
+  }
+
+  private sendUnsubscribe(channel: Channel, symbols: string[] = []) {
+    const payload: any = { channels: [{ name: channel }] };
+    if (symbols.length) payload.channels[0].symbols = symbols;
+    this.send({ type: 'unsubscribe', payload });
   }
 
   addHandler(fn: MessageHandler) {
     this.handlers.add(fn);
+  }
+
+  /**
+   * Return current subscribe records (mainly for debugging).
+   */
+  getSubscriptions() {
+    return [...this.subs];
   }
 
   removeHandler(fn: MessageHandler) {
@@ -77,7 +114,9 @@ class WebSocketService {
 
   private send(payload: any) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(payload));
+      const txt = JSON.stringify(payload);
+      console.debug('[ws] send', txt);
+      this.socket.send(txt);
     }
   }
 

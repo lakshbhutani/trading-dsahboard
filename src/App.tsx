@@ -7,6 +7,7 @@ import { wsService } from './ws/WebSocketService';
 import { useTickers } from './hooks/useTickers';
 import { useOrderBook } from './hooks/useOrderBook';
 import { useTrades } from './hooks/useTrades';
+import { groupingOptionsFor } from './constants';
 import './App.css';
 
 function App() {
@@ -23,16 +24,39 @@ function App() {
 
   useEffect(() => {
     wsService.addStatusHandler(setConnStatus);
+    // log every incoming message for dev visibility
+    const dbg = (msg: any) => console.debug('[ws] msg', msg);
+    wsService.addHandler(dbg);
     wsService.connect('ws://localhost:8080');
     return () => {
       wsService.removeStatusHandler(setConnStatus);
+      wsService.removeHandler(dbg);
     };
   }, []);
 
   // hooks that manage live data
   const tickers = useTickers();
-  const { bids, asks } = useOrderBook(focused);
-  const trades = useTrades(focused);
+  const {
+    bids,
+    asks,
+    groupedBids,
+    groupedAsks,
+    midPrice,
+    spread,
+    spreadBps,
+    imbalance,
+    setGroup,
+    group,
+    flashBids,
+    flashAsks,
+  } = useOrderBook(focused);
+  const [threshold, setThreshold] = useState<number>(10000);
+  const { aggTrades: trades, stats } = useTrades(focused, threshold);
+
+  // debugging/logging
+  useEffect(() => {
+    console.debug('focused', focused, 'tickers', tickers.length, 'bids', bids.length, 'asks', asks.length, 'trades', trades.length);
+  }, [focused, tickers, bids, asks, trades]);
 
   // persist focused symbol
   React.useEffect(() => {
@@ -41,14 +65,40 @@ function App() {
 
   return (
     <div className="App">
-      <ConnectionStatus status={connStatus} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <ConnectionStatus status={connStatus} />
+        <pre style={{ color: '#0f0', fontSize: '10px' }}>
+          {JSON.stringify(wsService.getSubscriptions(), null, 2)}
+        </pre>
+      </div>
       <TickerBar tickers={tickers} focused={focused} onSelect={setFocused} />
       <div className="main-panel">
         <div className="panel orderbook-panel">
-          <OrderBook bids={bids} asks={asks} />
+          <h2>{focused} Order Book</h2>
+          <OrderBook
+            bids={bids}
+            asks={asks}
+            groupedBids={groupedBids}
+            groupedAsks={groupedAsks}
+            midPrice={midPrice}
+            spread={spread}
+            spreadBps={spreadBps}
+            imbalance={imbalance}
+            group={group}
+            onGroupChange={setGroup}
+            groupOptions={groupingOptionsFor(focused)}
+            flashBids={flashBids}
+            flashAsks={flashAsks}
+          />
         </div>
-        <div className="panel trades-panel">
-          <TradesFeed trades={[]} />
+        <div className="panel trades-panel" style={{ position: 'relative' }}>
+          <h2>{focused} Trades</h2>
+          <TradesFeed
+            trades={trades}
+            stats={stats}
+            largeThreshold={threshold}
+            onThresholdChange={setThreshold}
+          />
         </div>
       </div>
     </div>

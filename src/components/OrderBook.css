@@ -1,8 +1,49 @@
 .orderbook-container {
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
   height: 100%;
   overflow: hidden;
+}
+
+.orderbook-header {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  gap: 12px;
+  background: #181a1f;
+  color: #fff;
+  font-size: 12px;
+}
+
+.orderbook-header select {
+  margin-left: 4px;
+  background: #222;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.orderbook-header .stats span {
+  margin-left: 8px;
+}
+
+.flash-up {
+  animation: flashGreen 0.5s;
+}
+
+.flash-down {
+  animation: flashRed 0.5s;
+}
+
+@keyframes flashGreen {
+  from { background-color: rgba(76,175,80,0.5); }
+  to { background-color: transparent; }
+}
+
+@keyframes flashRed {
+  from { background-color: rgba(244,67,54,0.5); }
+  to { background-color: transparent; }
 }
 
 .orderbook-asks,

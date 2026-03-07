@@ -6,6 +6,10 @@
   padding: 4px 8px;
 }
 
+.loading {
+  color: #999;
+  padding: 0 12px;
+}
 .ticker-item {
   padding: 0 12px;
   cursor: pointer;
