@@ -144,7 +144,10 @@ export function useOrderBook(symbol: string): OrderbookState {
   };
 
   const handleMessage = useCallback((msg: any) => {
-    if (msg.type === 'l2_orderbook' && msg.symbol === symbol) {
+    // sample payload contains type:'l2_orderbook', symbol:'SOLUSD', bids:[["70.4863","1.2697"],...]
+    const msgSym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
+    const targetSym = symbol.toUpperCase();
+    if (msg.type === 'l2_orderbook' && msgSym === targetSym) {
       const convert = (arr: any[]) => {
         return arr.map(([p, s]: any) => ({ price: Number(p), size: Number(s), cumulative: 0 }));
       };

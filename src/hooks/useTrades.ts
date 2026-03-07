@@ -58,12 +58,20 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   };
 
   const handleMessage = useCallback((msg: any) => {
-    const isTrade =
+    // the backend has been sending objects like the sample below:
+  // {
+  //   "buyer_role":"maker","price":"74.7905","size":103,...
+  //   "type":"all_trades","symbol":"SOLUSD",... }
+  // timestamps arrive in microseconds so we divide by 1000 later.
+  const isTrade =
       msg.type === 'all_trades' ||
       msg.type === 'trade' ||
       msg.channel === 'all_trades' ||
       msg.channel === 'trade';
-    if (isTrade && msg.symbol === symbol) {
+  // normalize symbols so a lower/upper case mismatch won't drop data
+  const msgSym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
+  const targetSym = symbol.toUpperCase();
+  if (isTrade && msgSym === targetSym) {
       console.debug('[useTrades] trade msg', msg);
       const raw: RawTrade = {
         time: new Date(msg.timestamp / 1000).toISOString().substr(11, 12),
@@ -94,11 +102,11 @@ export function useTrades(symbol: string, largeNotional = 10000) {
     wsService.addHandler(handleMessage);
     // subscribe to both variants just in case
     wsService.subscribe('all_trades', symbol);
-    wsService.subscribe('trade', symbol);
+    // wsService.subscribe('trade', symbol);
     return () => {
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('all_trades', symbol);
-      wsService.unsubscribe('trade', symbol);
+    //   wsService.unsubscribe('trade', symbol);
       setAggTrades([]);
       tradesWindow.current = [];
     };
