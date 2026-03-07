@@ -121,5 +121,11 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       tradesWindow.current = [];
     };
   }, [symbol, handleMessage]);
+
+  // log when the aggregated list actually changes (helps ensure flushOccurred)
+  useEffect(() => {
+    console.debug('[useTrades] aggTrades updated', aggTrades.length, 'items');
+  }, [aggTrades]);
+
   return { aggTrades, stats: statsRef.current };
 }
