@@ -86,14 +86,18 @@ class WebSocketService {
   }
 
   private sendSubscribe(channel: Channel, symbols: string[] = []) {
-    const payload: any = { channels: [{ name: channel }] };
-    if (symbols.length) payload.channels[0].symbols = symbols;
+    // server handler requires `symbols` to be an array (even if empty),
+    // otherwise it skips the channel entirely.  previously we omitted
+    // the field for top‑level subscriptions which meant the back end
+    // never registered the client for `v2/ticker` or similar.
+    const payload: any = { channels: [{ name: channel, symbols }] };
     this.send({ type: 'subscribe', payload });
   }
 
   private sendUnsubscribe(channel: Channel, symbols: string[] = []) {
-    const payload: any = { channels: [{ name: channel }] };
-    if (symbols.length) payload.channels[0].symbols = symbols;
+    // mirror sendSubscribe: always include symbols array so the server
+    // can correctly remove the subscription even when unsubscribing all.
+    const payload: any = { channels: [{ name: channel, symbols }] };
     this.send({ type: 'unsubscribe', payload });
   }
 
