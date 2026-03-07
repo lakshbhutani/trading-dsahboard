@@ -1,0 +1,38 @@
+.orderbook-container {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+.orderbook-asks,
+.orderbook-bids {
+  overflow-y: auto;
+}
+
+.orderbook-asks table,
+.orderbook-bids table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.orderbook-asks th,
+.orderbook-bids th {
+  position: sticky;
+  top: 0;
+  background: #222;
+  color: #fff;
+  font-weight: 500;
+  padding: 2px 4px;
+}
+
+.ask-row td {
+  color: #f44336;
+  padding: 2px 4px;
+}
+
+.bid-row td {
+  color: #4caf50;
+  padding: 2px 4px;
+}

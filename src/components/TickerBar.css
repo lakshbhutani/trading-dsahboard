@@ -1,0 +1,28 @@
+.ticker-bar {
+  display: flex;
+  overflow-x: auto;
+  background-color: #20232a;
+  color: #fff;
+  padding: 4px 8px;
+}
+
+.ticker-item {
+  padding: 0 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ticker-item.focused {
+  background-color: #333;
+  border-radius: 4px;
+}
+
+.change.positive {
+  color: #4caf50;
+}
+
+.change.negative {
+  color: #f44336;
+}

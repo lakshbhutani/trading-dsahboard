@@ -1,0 +1,21 @@
+.conn-status {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.conn-status.connected {
+  background: #4caf50;
+}
+
+.conn-status.reconnecting {
+  background: #ff9800;
+}
+
+.conn-status.disconnected {
+  background: #f44336;
+}

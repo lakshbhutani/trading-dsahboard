@@ -1,0 +1,26 @@
+.trades-feed {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.trades-feed table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trades-feed th {
+  position: sticky;
+  top: 0;
+  background: #222;
+  color: #fff;
+  padding: 2px 4px;
+}
+
+.trades-feed tr.buy td {
+  color: #4caf50;
+}
+
+.trades-feed tr.sell td {
+  color: #f44336;
+}
