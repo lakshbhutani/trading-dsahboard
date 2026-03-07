@@ -62,21 +62,9 @@ export function useOrderBook(symbol: string): OrderbookState {
     return computeCumulative(arr);
   };
 
-  const recalcDerived = useCallback(() => {
-    if (rawBids.length && rawAsks.length) {
-      const bestBid = rawBids[0].price;
-      const bestAsk = rawAsks[0].price;
-      const mid = (bestBid + bestAsk) / 2;
-      setMidPrice(mid);
-      const sp = bestAsk - bestBid;
-      setSpread(sp);
-      setSpreadBps((sp / mid) * 10000);
-      // imbalance on grouped view
-      const bidVol = groupedBids.reduce((s, l) => s + l.size, 0);
-      const askVol = groupedAsks.reduce((s, l) => s + l.size, 0);
-      setImbalance(bidVol / (askVol || 1));
-    }
-  }, [rawBids, rawAsks, groupedBids, groupedAsks]);
+  // compute derived values from raw or grouped data
+  // (separate effect to avoid cycles when grouped arrays change)
+
 
   // flash computation
   const computeFlash = (prev: Level[], curr: Level[]) => {
@@ -98,8 +86,15 @@ export function useOrderBook(symbol: string): OrderbookState {
     if (!symbol) return;
     const gb = groupLevels(rawBids, group, true);
     const ga = groupLevels(rawAsks, group, false);
-    setGroupedBids(gb);
-    setGroupedAsks(ga);
+
+    // only update state if the grouped arrays actually changed (avoids
+    // triggering a rerender which would re‑run this effect immediately)
+    const eqLevels = (a: Level[], b: Level[]) =>
+      a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
+
+    setGroupedBids((prev) => (eqLevels(prev, gb) ? prev : gb));
+    setGroupedAsks((prev) => (eqLevels(prev, ga) ? prev : ga));
+
     // compute flash based on previous grouped data
     const bidFlash: Record<number, 'up' | 'down'> = {};
     const bidPrevMap = new Map(prevGroupedBidsRef.current.map((l) => [l.price, l.size]));
@@ -128,9 +123,7 @@ export function useOrderBook(symbol: string): OrderbookState {
     // store current for next round
     prevGroupedBidsRef.current = gb;
     prevGroupedAsksRef.current = ga;
-
-    recalcDerived();
-  }, [rawBids, rawAsks, group, recalcDerived]);
+  }, [rawBids, rawAsks, group]);
 
   const handleMessage = useCallback((msg: any) => {
     if (msg.type === 'l2_orderbook' && msg.symbol === symbol) {
@@ -150,19 +143,48 @@ export function useOrderBook(symbol: string): OrderbookState {
     if (!symbol) return;
     wsService.addHandler(handleMessage);
     wsService.subscribe('l2_orderbook', symbol);
-    // also subscribe trades in hook? no
     return () => {
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('l2_orderbook', symbol);
-      setRawBids([]);
-      setRawAsks([]);
     };
   }, [symbol, handleMessage]);
 
+  // compute derived metrics when raw or grouped data updates
+  useEffect(() => {
+    if (rawBids.length && rawAsks.length) {
+      const bestBid = rawBids[0].price;
+      const bestAsk = rawAsks[0].price;
+      const mid = (bestBid + bestAsk) / 2;
+      setMidPrice(mid);
+      const sp = bestAsk - bestBid;
+      setSpread(sp);
+      setSpreadBps((sp / mid) * 10000);
+      const bidVol = groupedBids.reduce((s, l) => s + l.size, 0);
+      const askVol = groupedAsks.reduce((s, l) => s + l.size, 0);
+      setImbalance(bidVol / (askVol || 1));
+    }
+  }, [rawBids, rawAsks, groupedBids, groupedAsks]);
+
   // update grouping options when symbol changes
   useEffect(() => {
-    setGroup(groupingOptionsFor(symbol)[0] || 1);
+    const opts = groupingOptionsFor(symbol);
+    const stored = Number(localStorage.getItem(`group_${symbol}`));
+    if (opts.includes(stored)) {
+      setGroup(stored);
+    } else {
+      setGroup(opts[0] || 1);
+    }
+    // clear previous book when switching symbols to avoid visual artifacts
+    setRawBids([]);
+    setRawAsks([]);
   }, [symbol]);
+
+  // save group changes
+  useEffect(() => {
+    if (symbol) {
+      localStorage.setItem(`group_${symbol}`, String(group));
+    }
+  }, [group, symbol]);
 
   return {
     bids: rawBids,

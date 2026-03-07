@@ -50,8 +50,15 @@ function App() {
     flashBids,
     flashAsks,
   } = useOrderBook(focused);
-  const [threshold, setThreshold] = useState<number>(10000);
+  const [threshold, setThreshold] = useState<number>(() => {
+    const t = Number(localStorage.getItem('threshold'));
+    return t || 10000;
+  });
   const { aggTrades: trades, stats } = useTrades(focused, threshold);
+
+  useEffect(() => {
+    localStorage.setItem('threshold', String(threshold));
+  }, [threshold]);
 
   // debugging/logging
   useEffect(() => {
