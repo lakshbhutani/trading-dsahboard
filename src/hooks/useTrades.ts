@@ -58,7 +58,13 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   };
 
   const handleMessage = useCallback((msg: any) => {
-    if (msg.type === 'all_trades' && msg.symbol === symbol) {
+    const isTrade =
+      msg.type === 'all_trades' ||
+      msg.type === 'trade' ||
+      msg.channel === 'all_trades' ||
+      msg.channel === 'trade';
+    if (isTrade && msg.symbol === symbol) {
+      console.debug('[useTrades] trade msg', msg);
       const raw: RawTrade = {
         time: new Date(msg.timestamp / 1000).toISOString().substr(11, 12),
         price: Number(msg.price),
@@ -86,10 +92,13 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   useEffect(() => {
     if (!symbol) return;
     wsService.addHandler(handleMessage);
+    // subscribe to both variants just in case
     wsService.subscribe('all_trades', symbol);
+    wsService.subscribe('trade', symbol);
     return () => {
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('all_trades', symbol);
+      wsService.unsubscribe('trade', symbol);
       setAggTrades([]);
       tradesWindow.current = [];
     };
