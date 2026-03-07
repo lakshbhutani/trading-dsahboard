@@ -17,8 +17,12 @@ export function useTickers() {
   const scheduled = useRef(false);
 
   const flush = () => {
+    console.debug('[useTickers] flush start, pending', pending.current.size);
     setTickers((prev) => {
-      if (pending.current.size === 0) return prev;
+      if (pending.current.size === 0) {
+        console.debug('[useTickers] flush no-op (empty)');
+        return prev;
+      }
       const copy = [...prev];
       let changed = false;
       pending.current.forEach((incoming, sym) => {
@@ -39,6 +43,7 @@ export function useTickers() {
         }
       });
       pending.current.clear();
+      if (changed) console.debug('[useTickers] flush updating state, new len', copy.length);
       return changed ? copy : prev;
     });
     scheduled.current = false;
@@ -77,16 +82,12 @@ export function useTickers() {
     const symbols = Object.keys(SYMBOL_PRECISION);
     symbols.forEach((sym) => {
       wsService.subscribe('v2/ticker', sym);
-      wsService.subscribe('ticker' as any, sym); // alias
-      wsService.subscribe('tickers' as any, sym);
     });
     console.debug('[useTickers] subscriptions', wsService.getSubscriptions());
     return () => {
       console.debug('[useTickers] unmounting, unsubscribing');
       symbols.forEach((sym) => {
         wsService.unsubscribe('v2/ticker', sym);
-        wsService.unsubscribe('ticker' as any, sym);
-        wsService.unsubscribe('tickers' as any, sym);
       });
       wsService.removeHandler(handleMessage);
     };
