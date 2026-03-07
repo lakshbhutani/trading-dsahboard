@@ -1,6 +1,6 @@
 // minimal skeleton for websocket management
 
-export type Channel = 'v2/ticker' | 'l2_orderbook' | 'all_trades';
+export type Channel = 'v2/ticker' | 'ticker' | 'l2_orderbook' | 'all_trades';
 
 interface Subscription {
   channel: Channel;

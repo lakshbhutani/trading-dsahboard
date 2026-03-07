@@ -65,15 +65,17 @@ export function useTickers() {
   }, []);
 
   useEffect(() => {
-    console.debug('[useTickers] mounting, subscribing to v2/ticker (all symbols)');
+    console.debug('[useTickers] mounting, subscribing to ticker channels (all symbols)');
     wsService.addHandler(handleMessage);
     wsService.subscribe('v2/ticker');
+    wsService.subscribe('ticker'); // fallback in case backend uses plain name
     // log subscriptions for debugging
     console.debug('[useTickers] subscriptions', wsService.getSubscriptions());
     return () => {
-      console.debug('[useTickers] unmounting, unsubscribing from v2/ticker');
+      console.debug('[useTickers] unmounting, unsubscribing');
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('v2/ticker');
+      wsService.unsubscribe('ticker');
     };
   }, [handleMessage]);
 
