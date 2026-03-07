@@ -47,8 +47,10 @@ export function useTickers() {
     const isTicker =
       msg.type === 'v2/ticker' ||
       msg.type === 'ticker' ||
+      msg.type === 'tickers' ||
       msg.channel === 'v2/ticker' ||
-      msg.channel === 'ticker';
+      msg.channel === 'ticker' ||
+      msg.channel === 'tickers';
 
     if (isTicker) {
       const last = Number(msg.last_price || msg.lastPrice || msg.price);
@@ -69,6 +71,7 @@ export function useTickers() {
     wsService.addHandler(handleMessage);
     wsService.subscribe('v2/ticker');
     wsService.subscribe('ticker'); // fallback in case backend uses plain name
+    wsService.subscribe('tickers' as any); // sometimes plural
     // log subscriptions for debugging
     console.debug('[useTickers] subscriptions', wsService.getSubscriptions());
     return () => {
@@ -76,6 +79,7 @@ export function useTickers() {
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('v2/ticker');
       wsService.unsubscribe('ticker');
+      wsService.unsubscribe('tickers' as any);
     };
   }, [handleMessage]);
 

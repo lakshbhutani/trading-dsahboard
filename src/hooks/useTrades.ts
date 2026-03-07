@@ -41,6 +41,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   };
 
   const flushTrades = () => {
+    console.debug('[useTrades] flush called, pending', pending.current.length);
     setAggTrades((prev) => {
       if (pending.current.length === 0) return prev;
       const combined = [...pending.current, ...prev].slice(0, 1000);
@@ -50,8 +51,10 @@ export function useTrades(symbol: string, largeNotional = 10000) {
         combined.length === prev.length &&
         combined.every((v, i) => v.price === prev[i].price && v.size === prev[i].size && v.count === prev[i].count)
       ) {
+        console.debug('[useTrades] flush skip – identical');
         return prev;
       }
+      console.debug('[useTrades] flush update, new len', combined.length);
       return combined;
     });
     scheduledFlush.current = false;
@@ -66,8 +69,10 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   const isTrade =
       msg.type === 'all_trades' ||
       msg.type === 'trade' ||
+      msg.type === 'trades' ||
       msg.channel === 'all_trades' ||
-      msg.channel === 'trade';
+      msg.channel === 'trade' ||
+      msg.channel === 'trades';
   // normalize symbols so a lower/upper case mismatch won't drop data
   const msgSym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
   const targetSym = symbol.toUpperCase();
@@ -92,6 +97,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       }
       if (!scheduledFlush.current) {
         scheduledFlush.current = true;
+        console.debug('[useTrades] scheduling flush');
         requestAnimationFrame(flushTrades);
       }
     }
@@ -99,18 +105,21 @@ export function useTrades(symbol: string, largeNotional = 10000) {
 
   useEffect(() => {
     if (!symbol) return;
+    console.debug('[useTrades] effect mount for', symbol);
     wsService.addHandler(handleMessage);
-    // subscribe to both variants just in case
+    // subscribe to both known variants; some servers use "trade" or "trades"
     wsService.subscribe('all_trades', symbol);
-    // wsService.subscribe('trade', symbol);
+    wsService.subscribe('trade', symbol);
+    wsService.subscribe('trades', symbol as any); // cast to satisfy Channel type
     return () => {
+      console.debug('[useTrades] cleanup for', symbol);
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('all_trades', symbol);
-    //   wsService.unsubscribe('trade', symbol);
+      wsService.unsubscribe('trade', symbol);
+      wsService.unsubscribe('trades', symbol as any);
       setAggTrades([]);
       tradesWindow.current = [];
     };
   }, [symbol, handleMessage]);
-
   return { aggTrades, stats: statsRef.current };
 }
