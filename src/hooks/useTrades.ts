@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService } from '../ws/WebSocketService';
 
 export interface RawTrade {
@@ -25,7 +25,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   const statsRef = useRef<RollingStats>({ buyVolume: 0, sellVolume: 0, count: 0, avgSize: 0 });
   const tradesWindow = useRef<RawTrade[]>([]);
   const pending = useRef<AggTrade[]>([]);
-  const flushTimer = useRef<number>();
+  const scheduledFlush = useRef(false);
 
   const addToWindow = (t: RawTrade) => {
     const now = Date.now();
@@ -38,6 +38,23 @@ export function useTrades(symbol: string, largeNotional = 10000) {
     const count = tradesWindow.current.length;
     const avgSize = count ? tradesWindow.current.reduce((s,x)=>s+x.size,0)/count : 0;
     statsRef.current = { buyVolume: buyVol, sellVolume: sellVol, count, avgSize };
+  };
+
+  const flushTrades = () => {
+    setAggTrades((prev) => {
+      if (pending.current.length === 0) return prev;
+      const combined = [...pending.current, ...prev].slice(0, 1000);
+      pending.current = [];
+      // simple shallow compare
+      if (
+        combined.length === prev.length &&
+        combined.every((v, i) => v.price === prev[i].price && v.size === prev[i].size && v.count === prev[i].count)
+      ) {
+        return prev;
+      }
+      return combined;
+    });
+    scheduledFlush.current = false;
   };
 
   const handleMessage = useCallback((msg: any) => {
@@ -59,12 +76,9 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       } else {
         pending.current.push({ ...raw, count: 1 });
       }
-      if (!flushTimer.current) {
-        flushTimer.current = window.setTimeout(() => {
-          setAggTrades((prev) => [...pending.current, ...prev].slice(0, 1000));
-          pending.current = [];
-          flushTimer.current = undefined;
-        }, 100);
+      if (!scheduledFlush.current) {
+        scheduledFlush.current = true;
+        requestAnimationFrame(flushTrades);
       }
     }
   }, [symbol]);

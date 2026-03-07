@@ -1,5 +1,3 @@
-import { useEffect, useState, useCallback } from 'react';
-import { wsService } from '../ws/WebSocketService';
 
 export interface Level {
   price: number;
@@ -33,10 +31,13 @@ export function useOrderBook(symbol: string): OrderbookState {
 
   const [groupedBids, setGroupedBids] = useState<Level[]>([]);
   const [groupedAsks, setGroupedAsks] = useState<Level[]>([]);
-  const [midPrice, setMidPrice] = useState<number>();
-  const [spread, setSpread] = useState<number>();
-  const [spreadBps, setSpreadBps] = useState<number>();
-  const [imbalance, setImbalance] = useState<number>();
+  // derived metrics (batched together to avoid multiple state updates per render)
+  const [derived, setDerived] = useState<{
+    midPrice?: number;
+    spread?: number;
+    spreadBps?: number;
+    imbalance?: number;
+  }>({});
 
   const flashBidsRef = useRef<Record<number, 'up' | 'down'>>({});
   const flashAsksRef = useRef<Record<number, 'up' | 'down'>>({});
@@ -125,17 +126,37 @@ export function useOrderBook(symbol: string): OrderbookState {
     prevGroupedAsksRef.current = ga;
   }, [rawBids, rawAsks, group]);
 
+  // helpers for comparison
+  const eqLevels = (a: Level[], b: Level[]) =>
+    a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
+
+  // buffer incoming snapshots and flush once per animation frame
+  const pendingRef = useRef<{ bids: Level[]; asks: Level[] } | null>(null);
+  const scheduledRef = useRef(false);
+  const flushPending = () => {
+    if (pendingRef.current) {
+      const { bids, asks } = pendingRef.current;
+      setRawBids((prev) => (eqLevels(prev, bids) ? prev : bids));
+      setRawAsks((prev) => (eqLevels(prev, asks) ? prev : asks));
+      pendingRef.current = null;
+    }
+    scheduledRef.current = false;
+  };
+
   const handleMessage = useCallback((msg: any) => {
     if (msg.type === 'l2_orderbook' && msg.symbol === symbol) {
       const convert = (arr: any[]) => {
         return arr.map(([p, s]: any) => ({ price: Number(p), size: Number(s), cumulative: 0 }));
       };
-      const bids = convert(msg.bids); // sorted descending inside map?
-      bids.sort((a,b)=>b.price-a.price);
+      const bids = convert(msg.bids);
+      bids.sort((a, b) => b.price - a.price);
       const asks = convert(msg.asks);
-      asks.sort((a,b)=>a.price-b.price);
-      setRawBids(bids);
-      setRawAsks(asks);
+      asks.sort((a, b) => a.price - b.price);
+      pendingRef.current = { bids, asks };
+      if (!scheduledRef.current) {
+        scheduledRef.current = true;
+        requestAnimationFrame(flushPending);
+      }
     }
   }, [symbol]);
 
@@ -155,13 +176,15 @@ export function useOrderBook(symbol: string): OrderbookState {
       const bestBid = rawBids[0].price;
       const bestAsk = rawAsks[0].price;
       const mid = (bestBid + bestAsk) / 2;
-      setMidPrice(mid);
       const sp = bestAsk - bestBid;
-      setSpread(sp);
-      setSpreadBps((sp / mid) * 10000);
       const bidVol = groupedBids.reduce((s, l) => s + l.size, 0);
       const askVol = groupedAsks.reduce((s, l) => s + l.size, 0);
-      setImbalance(bidVol / (askVol || 1));
+      setDerived({
+        midPrice: mid,
+        spread: sp,
+        spreadBps: (sp / mid) * 10000,
+        imbalance: bidVol / (askVol || 1),
+      });
     }
   }, [rawBids, rawAsks, groupedBids, groupedAsks]);
 
@@ -191,10 +214,10 @@ export function useOrderBook(symbol: string): OrderbookState {
     asks: rawAsks,
     groupedBids,
     groupedAsks,
-    midPrice,
-    spread,
-    spreadBps,
-    imbalance,
+    midPrice: derived.midPrice,
+    spread: derived.spread,
+    spreadBps: derived.spreadBps,
+    imbalance: derived.imbalance,
     setGroup,
     group,
     flashBids: flashBidsRef.current,
