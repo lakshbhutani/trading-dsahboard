@@ -7,8 +7,6 @@ interface Ticker {
   change24h: number;
 }
 
-// list of all symbols we care about
-const ALL_SYMBOLS = ['BTCUSD','ETHUSD','XRPUSD','SOLUSD','PAXGUSD','DOGEUSD'];
 
 export function useTickers() {
   const [tickers, setTickers] = useState<Ticker[]>([]);
@@ -46,8 +44,9 @@ export function useTickers() {
   };
 
   const handleMessage = useCallback((msg: any) => {
-    if (msg.type === 'v2/ticker') {
-      const last = Number(msg.last_price);
+    if (msg.type === 'v2/ticker' || msg.type === 'ticker') {
+      const last = Number(msg.last_price || msg.lastPrice || msg.price);
+      console.debug('[useTickers] tick msg', msg.symbol, last, 'type', msg.type);
       const change24h = 0; // will compute relative to previous in flush
       // store update
       pending.current.set(msg.symbol, { symbol: msg.symbol, last, change24h });
@@ -55,16 +54,21 @@ export function useTickers() {
         scheduled.current = true;
         requestAnimationFrame(flush);
       }
+    } else if (msg.type && msg.type.includes('ticker')) {
+      console.debug('[useTickers] other ticker-like message', msg);
     }
   }, []);
 
   useEffect(() => {
+    console.debug('[useTickers] mounting, subscribing to v2/ticker (all symbols)');
     wsService.addHandler(handleMessage);
-    // subscribe for every symbol individually - server requires symbols array
-    ALL_SYMBOLS.forEach((sym) => wsService.subscribe('v2/ticker', sym));
+    wsService.subscribe('v2/ticker');
+    // log subscriptions for debugging
+    console.debug('[useTickers] subscriptions', wsService.getSubscriptions());
     return () => {
+      console.debug('[useTickers] unmounting, unsubscribing from v2/ticker');
       wsService.removeHandler(handleMessage);
-      ALL_SYMBOLS.forEach((sym) => wsService.unsubscribe('v2/ticker', sym));
+      wsService.unsubscribe('v2/ticker');
     };
   }, [handleMessage]);
 
