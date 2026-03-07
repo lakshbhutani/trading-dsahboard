@@ -44,17 +44,22 @@ export function useTickers() {
   };
 
   const handleMessage = useCallback((msg: any) => {
-    if (msg.type === 'v2/ticker' || msg.type === 'ticker') {
+    const isTicker =
+      msg.type === 'v2/ticker' ||
+      msg.type === 'ticker' ||
+      msg.channel === 'v2/ticker' ||
+      msg.channel === 'ticker';
+
+    if (isTicker) {
       const last = Number(msg.last_price || msg.lastPrice || msg.price);
-      console.debug('[useTickers] tick msg', msg.symbol, last, 'type', msg.type);
+      console.debug('[useTickers] tick msg', msg.symbol, last, 'raw', msg);
       const change24h = 0; // will compute relative to previous in flush
-      // store update
       pending.current.set(msg.symbol, { symbol: msg.symbol, last, change24h });
       if (!scheduled.current) {
         scheduled.current = true;
         requestAnimationFrame(flush);
       }
-    } else if (msg.type && msg.type.includes('ticker')) {
+    } else if ((msg.type && msg.type.includes('ticker')) || (msg.channel && msg.channel.includes('ticker'))) {
       console.debug('[useTickers] other ticker-like message', msg);
     }
   }, []);
