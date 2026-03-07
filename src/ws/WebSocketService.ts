@@ -14,12 +14,14 @@ class WebSocketService {
   private handlers: Set<MessageHandler> = new Set();
   private subs: Subscription[] = [];
   private reconnectAttempts = 0;
+  private statusHandlers: Set<(status: 'connected' | 'reconnecting' | 'disconnected') => void> = new Set();
 
   connect(url: string) {
     if (this.socket) return;
     this.socket = new WebSocket(url);
     this.socket.onopen = () => {
       this.reconnectAttempts = 0;
+      this.notifyStatus('connected');
       this.send({ op: 'ping' });
       this.subs.forEach((s) => this.send({ op: 'subscribe', channel: s.channel, symbol: s.symbol }));
     };
@@ -29,6 +31,7 @@ class WebSocketService {
     };
     this.socket.onclose = () => {
       this.socket = null;
+      this.notifyStatus('disconnected');
       this.reconnect();
     };
     this.socket.onerror = () => {
@@ -37,6 +40,7 @@ class WebSocketService {
   }
 
   private reconnect() {
+    this.notifyStatus('reconnecting');
     const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
     setTimeout(() => {
       this.reconnectAttempts++;
@@ -79,6 +83,18 @@ class WebSocketService {
 
   // keep track of url for reconnect
   private url: string | null = null;
+
+  addStatusHandler(fn: (status: 'connected' | 'reconnecting' | 'disconnected') => void) {
+    this.statusHandlers.add(fn);
+  }
+
+  removeStatusHandler(fn: (status: 'connected' | 'reconnecting' | 'disconnected') => void) {
+    this.statusHandlers.delete(fn);
+  }
+
+  private notifyStatus(status: 'connected' | 'reconnecting' | 'disconnected') {
+    this.statusHandlers.forEach((h) => h(status));
+  }
 }
 
 export const wsService = new WebSocketService();

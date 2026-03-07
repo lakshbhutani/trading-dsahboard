@@ -1,29 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ConnectionStatus from './components/ConnectionStatus';
 import TickerBar from './components/TickerBar';
 import OrderBook from './components/OrderBook';
 import TradesFeed from './components/TradesFeed';
+import { wsService } from './ws/WebSocketService';
+import { useTickers } from './hooks/useTickers';
+import { useOrderBook } from './hooks/useOrderBook';
+import { useTrades } from './hooks/useTrades';
 import './App.css';
 
 function App() {
-  const [focused, setFocused] = useState('BTCUSD');
+  const [focused, setFocused] = useState<string>(() => {
+    try {
+      return localStorage.getItem('focused') || 'BTCUSD';
+    } catch {
+      return 'BTCUSD';
+    }
+  });
 
-  // placeholder data
-  const tickers = [
-    { symbol: 'BTCUSD', last: 62341.5, change24h: 2.34 },
-    { symbol: 'ETHUSD', last: 1742.18, change24h: -1.12 },
-    { symbol: 'XRPUSD', last: 1.4523, change24h: 0.89 },
-    { symbol: 'SOLUSD', last: 74.2310, change24h: 5.67 },
-    { symbol: 'PAXGUSD', last: 5231.45, change24h: -0.32 },
-    { symbol: 'DOGEUSD', last: 0.054231, change24h: 3.21 }
-  ];
+  // initialize websocket connection once
+  const [connStatus, setConnStatus] = useState<'connected' | 'reconnecting' | 'disconnected'>('disconnected');
 
-  const bids = Array.from({ length: 20 }, (_, i) => ({ price: 62341 - i, size: Math.random() * 5, cumulative: 0 }));
-  const asks = Array.from({ length: 20 }, (_, i) => ({ price: 62341 + i, size: Math.random() * 5, cumulative: 0 }));
+  useEffect(() => {
+    wsService.addStatusHandler(setConnStatus);
+    wsService.connect('ws://localhost:8080');
+    return () => {
+      wsService.removeStatusHandler(setConnStatus);
+    };
+  }, []);
+
+  // hooks that manage live data
+  const tickers = useTickers();
+  const { bids, asks } = useOrderBook(focused);
+  const trades = useTrades(focused);
+
+  // persist focused symbol
+  React.useEffect(() => {
+    localStorage.setItem('focused', focused);
+  }, [focused]);
 
   return (
     <div className="App">
-      <ConnectionStatus status="connected" />
+      <ConnectionStatus status={connStatus} />
       <TickerBar tickers={tickers} focused={focused} onSelect={setFocused} />
       <div className="main-panel">
         <div className="panel orderbook-panel">
