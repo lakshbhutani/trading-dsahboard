@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService } from '../ws/WebSocketService';
+import { SYMBOL_PRECISION } from '../constants';
 
 interface Ticker {
   symbol: string;
@@ -69,17 +70,25 @@ export function useTickers() {
   useEffect(() => {
     console.debug('[useTickers] mounting, subscribing to ticker channels (all symbols)');
     wsService.addHandler(handleMessage);
-    wsService.subscribe('v2/ticker');
-    wsService.subscribe('ticker'); // fallback in case backend uses plain name
-    wsService.subscribe('tickers' as any); // sometimes plural
-    // log subscriptions for debugging
+    // server requires at least one symbol in the subscription set, so
+    // we iterate known symbols and add them individually.  this mirrors the
+    // behaviour we had when the backend treated a missing "symbols" field
+    // as "all".
+    const symbols = Object.keys(SYMBOL_PRECISION);
+    symbols.forEach((sym) => {
+      wsService.subscribe('v2/ticker', sym);
+      wsService.subscribe('ticker' as any, sym); // alias
+      wsService.subscribe('tickers' as any, sym);
+    });
     console.debug('[useTickers] subscriptions', wsService.getSubscriptions());
     return () => {
       console.debug('[useTickers] unmounting, unsubscribing');
+      symbols.forEach((sym) => {
+        wsService.unsubscribe('v2/ticker', sym);
+        wsService.unsubscribe('ticker' as any, sym);
+        wsService.unsubscribe('tickers' as any, sym);
+      });
       wsService.removeHandler(handleMessage);
-      wsService.unsubscribe('v2/ticker');
-      wsService.unsubscribe('ticker');
-      wsService.unsubscribe('tickers' as any);
     };
   }, [handleMessage]);
 
