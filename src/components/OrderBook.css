@@ -24,6 +24,24 @@
   font-size: 12px;
 }
 
+.orderbook-header .totals {
+  margin-left: 12px;
+  font-size: 12px;
+}
+
+.orderbook-header .totals span {
+  margin-right: 8px;
+}
+
+.live-badge {
+  background: #f44336;
+  color: #fff;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+}
+
 .orderbook-header .stats span {
   margin-left: 8px;
 }
@@ -71,9 +89,27 @@
 .ask-row td {
   color: #f44336;
   padding: 2px 4px;
+  position: relative;
 }
 
 .bid-row td {
   color: #4caf50;
   padding: 2px 4px;
+  position: relative;
+}
+
+.ask-row::before,
+.bid-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--bar-width, 0%);
+  background: rgba(244,67,54,0.1);
+  z-index: -1;
+}
+
+.bid-row::before {
+  background: rgba(76,175,80,0.1);
 }

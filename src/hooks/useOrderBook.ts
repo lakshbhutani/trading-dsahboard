@@ -1,9 +1,17 @@
 
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { wsService } from '../ws/WebSocketService';
+import { groupingOptionsFor } from '../constants';
+
 export interface Level {
   price: number;
   size: number;
   cumulative: number;
 }
+
+// Move helper outside to ensure stability and access
+const eqLevels = (a: Level[], b: Level[]) =>
+  a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
 
 export interface OrderbookState {
   bids: Level[];
@@ -19,10 +27,6 @@ export interface OrderbookState {
   flashBids: Record<number, 'up' | 'down'>;
   flashAsks: Record<number, 'up' | 'down'>;
 }
-
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { wsService } from '../ws/WebSocketService';
-import { groupingOptionsFor } from '../constants';
 
 export function useOrderBook(symbol: string): OrderbookState {
   const [rawBids, setRawBids] = useState<Level[]>([]);
@@ -90,9 +94,6 @@ export function useOrderBook(symbol: string): OrderbookState {
 
     // only update state if the grouped arrays actually changed (avoids
     // triggering a rerender which would re‑run this effect immediately)
-    const eqLevels = (a: Level[], b: Level[]) =>
-      a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
-
     setGroupedBids((prev) => (eqLevels(prev, gb) ? prev : gb));
     setGroupedAsks((prev) => (eqLevels(prev, ga) ? prev : ga));
 
@@ -126,24 +127,8 @@ export function useOrderBook(symbol: string): OrderbookState {
     prevGroupedAsksRef.current = ga;
   }, [rawBids, rawAsks, group]);
 
-  // helpers for comparison
-  const eqLevels = (a: Level[], b: Level[]) =>
-    a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
-
-  // buffer incoming snapshots and flush once per animation frame
-  const pendingRef = useRef<{ bids: Level[]; asks: Level[] } | null>(null);
-  const scheduledRef = useRef(false);
-  const flushPending = () => {
-    if (pendingRef.current) {
-      const { bids, asks } = pendingRef.current;
-      setRawBids((prev) => (eqLevels(prev, bids) ? prev : bids));
-      setRawAsks((prev) => (eqLevels(prev, asks) ? prev : asks));
-      pendingRef.current = null;
-    }
-    scheduledRef.current = false;
-  };
-
   const handleMessage = useCallback((msg: any) => {
+    // console.log('handleMessage----', msg)
     // sample payload contains type:'l2_orderbook', symbol:'SOLUSD', bids:[["70.4863","1.2697"],...]
     const msgSym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
     const targetSym = symbol.toUpperCase();
@@ -155,11 +140,8 @@ export function useOrderBook(symbol: string): OrderbookState {
       bids.sort((a, b) => b.price - a.price);
       const asks = convert(msg.asks);
       asks.sort((a, b) => a.price - b.price);
-      pendingRef.current = { bids, asks };
-      if (!scheduledRef.current) {
-        scheduledRef.current = true;
-        requestAnimationFrame(flushPending);
-      }
+      setRawBids(bids);
+      setRawAsks(asks);
     }
   }, [symbol]);
 

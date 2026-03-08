@@ -26,6 +26,9 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for an overview of the design and perfo
 
 ## Notes
 - UI mockup is based on the provided wireframe screenshot.
+- Click a ticker in the horizontal bar to focus a product; the order book and trades panels will automatically subscribe/unsubscribe.
+- Order book grouping can be adjusted via the dropdown above the table; options depend on the symbol's price precision.
+- Trade feed merges trades at the same price within 100 ms and provides rolling stats and a large‑trade threshold control.
 - The application uses a single WebSocket connection to subscribe to multiple channels depending on the focused symbol.
 
 ## Available Scripts

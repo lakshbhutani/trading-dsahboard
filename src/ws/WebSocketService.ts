@@ -23,14 +23,7 @@ class WebSocketService {
     this.socket.onopen = () => {
       this.reconnectAttempts = 0;
       this.notifyStatus('connected');
-      // re‑subscribe existing
-      this.subs.forEach((s) => {
-        if (s.channel && s.symbol) {
-          this.sendSubscribe(s.channel, [s.symbol]);
-        } else if (s.channel) {
-          this.sendSubscribe(s.channel);
-        }
-      });
+      this.sendSubscriptions();
     };
     this.socket.onmessage = (ev) => {
       let msg: any;
@@ -39,7 +32,13 @@ class WebSocketService {
       } catch {
         return;
       }
-      this.handlers.forEach((h) => h(msg));
+      this.handlers.forEach((h) => {
+        try {
+          h(msg);
+        } catch (e) {
+          console.error('[WebSocketService] handler error', e);
+        }
+      });
     };
     this.socket.onclose = () => {
       this.socket = null;
@@ -65,33 +64,52 @@ class WebSocketService {
     this.socket = null;
   }
 
-  subscribe(channel: Channel, symbol?: string) {
+  subscribe(channel: Channel, symbol?: string | string[]) {
     // track subscription state
-    const existing = this.subs.find((s) => s.channel === channel && s.symbol === symbol);
-    if (!existing) {
-      this.subs.push({ channel, symbol });
-    }
+    const symbols = Array.isArray(symbol) ? symbol : [symbol];
+    symbols.forEach(s => {
+      if (!this.subs.find(sub => sub.channel === channel && sub.symbol === s)) {
+        this.subs.push({ channel, symbol: s });
+      }
+    });
+
     if (this.socket?.readyState === WebSocket.OPEN) {
-      if (symbol) this.sendSubscribe(channel, [symbol]);
-      else this.sendSubscribe(channel);
+      this.sendSubscriptions();
     }
   }
 
-  unsubscribe(channel: Channel, symbol?: string) {
-    this.subs = this.subs.filter((s) => !(s.channel === channel && s.symbol === symbol));
+  unsubscribe(channel: Channel, symbol?: string | string[]) {
+    const symbols = Array.isArray(symbol) ? symbol : [symbol];
+    this.subs = this.subs.filter(s => {
+      return !(s.channel === channel && symbols.includes(s.symbol));
+    });
+
     if (this.socket?.readyState === WebSocket.OPEN) {
-      if (symbol) this.sendUnsubscribe(channel, [symbol]);
-      else this.sendUnsubscribe(channel);
+      if (Array.isArray(symbol)) {
+        this.sendUnsubscribe(channel, symbol);
+      } else if (symbol) {
+        this.sendUnsubscribe(channel, [symbol]);
+      } else {
+        this.sendUnsubscribe(channel);
+      }
     }
   }
 
-  private sendSubscribe(channel: Channel, symbols: string[] = []) {
-    // server handler requires `symbols` to be an array (even if empty),
-    // otherwise it skips the channel entirely.  previously we omitted
-    // the field for top‑level subscriptions which meant the back end
-    // never registered the client for `v2/ticker` or similar.
-    const payload: any = { channels: [{ name: channel, symbols }] };
-    this.send({ type: 'subscribe', payload });
+  private sendSubscriptions() {
+    const subsByChannel = this.subs.reduce((acc, s) => {
+      if (!acc[s.channel]) acc[s.channel] = [];
+      if (s.symbol) acc[s.channel].push(s.symbol);
+      return acc;
+    }, {} as Record<Channel, string[]>);
+
+    const channels = Object.entries(subsByChannel).map(([name, symbols]) => ({
+      name,
+      symbols,
+    }));
+
+    if (channels.length > 0) {
+      this.send({ type: 'subscribe', payload: { channels } });
+    }
   }
 
   private sendUnsubscribe(channel: Channel, symbols: string[] = []) {
@@ -119,7 +137,6 @@ class WebSocketService {
   private send(payload: any) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
       const txt = JSON.stringify(payload);
-      console.debug('[ws] send', txt);
       this.socket.send(txt);
     }
   }

@@ -13,7 +13,8 @@ interface Props {
   onSelect: (symbol: string) => void;
 }
 
-const TickerBar: React.FC<Props> = ({ tickers, focused, onSelect }) => {
+const TickerBar: React.FC<Props> = React.memo(({ tickers, focused, onSelect }) => {
+  console.log('tickers-----', tickers);
   return (
     <div className="ticker-bar">
       {tickers.length === 0 ? (
@@ -24,7 +25,6 @@ const TickerBar: React.FC<Props> = ({ tickers, focused, onSelect }) => {
             key={t.symbol}
             className={`ticker-item ${focused === t.symbol ? 'focused' : ''}`}
             onClick={() => {
-              console.debug('ticker clicked', t.symbol);
               onSelect(t.symbol);
             }}
           >
@@ -38,6 +38,6 @@ const TickerBar: React.FC<Props> = ({ tickers, focused, onSelect }) => {
       )}
     </div>
   );
-};
+});
 
 export default TickerBar;

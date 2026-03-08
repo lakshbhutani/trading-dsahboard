@@ -1,4 +1,3 @@
-import React from 'react';
 import './TradesFeed.css';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -26,7 +25,7 @@ interface Props {
   onThresholdChange: (n: number) => void;
 }
 
-const TradesFeed: React.FC<Props> = ({ trades, stats, largeThreshold, onThresholdChange }) => {
+const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold, onThresholdChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -46,6 +45,20 @@ const TradesFeed: React.FC<Props> = ({ trades, stats, largeThreshold, onThreshol
       setAutoScroll(false);
     }
   };
+
+  const renderedRows = React.useMemo(() => {
+    if (trades.length === 0) return <tr><td colSpan={3}>no trades</td></tr>;
+    return trades.map((t, idx) => (
+      <tr
+        key={idx}
+        className={`${t.side === 'buy' ? 'buy' : 'sell'} ${t.price * t.size >= largeThreshold ? 'large' : ''}`}
+      >
+        <td>{t.time}</td>
+        <td>{t.price.toFixed(2)}</td>
+        <td>{t.size}{t.count > 1 ? ` (${t.count})` : ''}</td>
+      </tr>
+    ));
+  }, [trades, largeThreshold]);
 
   return (
     <div className="trades-feed">
@@ -76,21 +89,8 @@ const TradesFeed: React.FC<Props> = ({ trades, stats, largeThreshold, onThreshol
             </tr>
           </thead>
           <tbody>
-            {trades.length === 0 ? (
-              <tr><td colSpan={3}>no trades</td></tr>
-            ) : (
-              trades.map((t, idx) => (
-                <tr
-                  key={idx}
-                  className={`${t.side === 'buy' ? 'buy' : 'sell'} ${t.price * t.size >= largeThreshold ? 'large' : ''}`}
-                >
-                  <td>{t.time}</td>
-                  <td>{t.price.toFixed(2)}</td>
-                  <td>{t.size}{t.count > 1 ? ` (${t.count})` : ''}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
+          {renderedRows}
+      </tbody>
         </table>
       </div>
       {!autoScroll && (
@@ -100,6 +100,6 @@ const TradesFeed: React.FC<Props> = ({ trades, stats, largeThreshold, onThreshol
       )}
     </div>
   );
-};
+});
 
 export default TradesFeed;

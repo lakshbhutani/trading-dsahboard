@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ConnectionStatus from './components/ConnectionStatus';
 import TickerBar from './components/TickerBar';
 import OrderBook from './components/OrderBook';
@@ -25,12 +25,9 @@ function App() {
   useEffect(() => {
     wsService.addStatusHandler(setConnStatus);
     // log every incoming message for dev visibility
-    const dbg = (msg: any) => console.debug('[ws] msg', msg);
-    wsService.addHandler(dbg);
     wsService.connect('ws://localhost:8080');
     return () => {
       wsService.removeStatusHandler(setConnStatus);
-      wsService.removeHandler(dbg);
     };
   }, []);
 
@@ -60,11 +57,6 @@ function App() {
     localStorage.setItem('threshold', String(threshold));
   }, [threshold]);
 
-  // debugging/logging
-  useEffect(() => {
-    console.debug('focused', focused, 'tickers', tickers.length, 'bids', bids.length, 'asks', asks.length, 'trades', trades.length);
-  }, [focused, tickers, bids, asks, trades]);
-
   // persist focused symbol
   React.useEffect(() => {
     localStorage.setItem('focused', focused);
@@ -74,9 +66,9 @@ function App() {
     <div className="App">
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <ConnectionStatus status={connStatus} />
-        <pre style={{ color: '#0f0', fontSize: '10px' }}>
+        {/* <pre style={{ color: '#0f0', fontSize: '10px' }}>
           {JSON.stringify(wsService.getSubscriptions(), null, 2)}
-        </pre>
+        </pre> */}
       </div>
       <TickerBar tickers={tickers} focused={focused} onSelect={setFocused} />
       <div className="main-panel">
