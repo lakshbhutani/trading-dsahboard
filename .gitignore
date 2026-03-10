@@ -53,3 +53,4 @@ typings/
 .vscode/ # VS Code (optional, can contain useful config)
 *.swp # Vim swap files
 .git/
+settings.json # VS Code settings (optional, can contain useful config)

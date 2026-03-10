@@ -86,16 +86,18 @@
   padding: 2px 4px;
 }
 
+.ask-row, .bid-row {
+  position: relative;
+}
+
 .ask-row td {
   color: #f44336;
   padding: 2px 4px;
-  position: relative;
 }
 
 .bid-row td {
   color: #4caf50;
   padding: 2px 4px;
-  position: relative;
 }
 
 .ask-row::before,

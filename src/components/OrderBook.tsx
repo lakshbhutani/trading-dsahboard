@@ -38,10 +38,13 @@ const OrderBook: React.FC<Props> = React.memo(({
   flashBids,
   flashAsks,
 }) => {
-  const maxBidCum = React.useMemo(() => groupedBids.reduce((m, l) => Math.max(m, l.cumulative), 0), [groupedBids]);
-  const maxAskCum = React.useMemo(() => groupedAsks.reduce((m, l) => Math.max(m, l.cumulative), 0), [groupedAsks]);
-  const totalBid = React.useMemo(() => groupedBids.reduce((s, l) => s + l.size, 0), [groupedBids]);
-  const totalAsk = React.useMemo(() => groupedAsks.reduce((s, l) => s + l.size, 0), [groupedAsks]);
+  // Optimization: The last element in a cumulative array holds the total/max value. O(1) access.
+  const maxBidCum = React.useMemo(() => groupedBids.length ? groupedBids[groupedBids.length - 1].cumulative : 0, [groupedBids]);
+  const maxAskCum = React.useMemo(() => groupedAsks.length ? groupedAsks[groupedAsks.length - 1].cumulative : 0, [groupedAsks]);
+  const totalBid = maxBidCum;
+  const totalAsk = maxAskCum;
+  const VISIBLE_ROWS = 25;
+
   return (
     <div className="orderbook-container">
       <div className="orderbook-header">
@@ -70,31 +73,31 @@ const OrderBook: React.FC<Props> = React.memo(({
       </div>
 
       <div className="orderbook-asks">
-        <table>
+        <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th>Price</th>
-              <th>Size</th>
-              <th>Cum.</th>
+              <th style={{ textAlign: 'left' }}>Price</th>
+              <th style={{ textAlign: 'right' }}>Size</th>
+              <th style={{ textAlign: 'right' }}>Cum.</th>
             </tr>
           </thead>
           <tbody>
             {groupedAsks.length === 0 ? (
               <tr><td colSpan={3}>no data</td></tr>
             ) : (
-              groupedAsks.map((a, idx) => {
+              groupedAsks.slice(0, VISIBLE_ROWS).map((a) => {
                 const pct = maxAskCum ? (a.cumulative / maxAskCum) * 100 : 0;
                 return (
                   <tr
-                    key={idx}
+                    key={a.price}
                     className={`ask-row ${flashAsks[a.price] === 'up' ? 'flash-up' : ''} ${
                       flashAsks[a.price] === 'down' ? 'flash-down' : ''
                     }`}
                     style={{ '--bar-width': `${pct}%` } as any}
                   >
-                    <td>{a.price.toFixed(2)}</td>
-                    <td>{a.size.toFixed(4)}</td>
-                    <td>{a.cumulative.toFixed(4)}</td>
+                    <td style={{ textAlign: 'left' }}>{a.price.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right' }}>{a.size.toFixed(4)}</td>
+                    <td style={{ textAlign: 'right' }}>{a.cumulative.toFixed(4)}</td>
                   </tr>
                 );
               })
@@ -103,31 +106,31 @@ const OrderBook: React.FC<Props> = React.memo(({
         </table>
       </div>
       <div className="orderbook-bids">
-        <table>
+        <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th>Price</th>
-              <th>Size</th>
-              <th>Cum.</th>
+              <th style={{ textAlign: 'left' }}>Price</th>
+              <th style={{ textAlign: 'right' }}>Size</th>
+              <th style={{ textAlign: 'right' }}>Cum.</th>
             </tr>
           </thead>
           <tbody>
             {groupedBids.length === 0 ? (
               <tr><td colSpan={3}>no data</td></tr>
             ) : (
-              groupedBids.map((b, idx) => {
+              groupedBids.slice(0, VISIBLE_ROWS).map((b) => {
                 const pct = maxBidCum ? (b.cumulative / maxBidCum) * 100 : 0;
                 return (
                   <tr
-                    key={idx}
+                    key={b.price}
                     className={`bid-row ${flashBids[b.price] === 'up' ? 'flash-up' : ''} ${
                       flashBids[b.price] === 'down' ? 'flash-down' : ''
                     }`}
                     style={{ '--bar-width': `${pct}%` } as any}
                   >
-                    <td>{b.price.toFixed(2)}</td>
-                    <td>{b.size.toFixed(4)}</td>
-                    <td>{b.cumulative.toFixed(4)}</td>
+                    <td style={{ textAlign: 'left' }}>{b.price.toFixed(2)}</td>
+                    <td style={{ textAlign: 'right' }}>{b.size.toFixed(4)}</td>
+                    <td style={{ textAlign: 'right' }}>{b.cumulative.toFixed(4)}</td>
                   </tr>
                 );
               })

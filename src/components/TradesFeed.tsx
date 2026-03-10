@@ -53,9 +53,9 @@ const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold,
         key={idx}
         className={`${t.side === 'buy' ? 'buy' : 'sell'} ${t.price * t.size >= largeThreshold ? 'large' : ''}`}
       >
-        <td>{t.time}</td>
-        <td>{t.price.toFixed(2)}</td>
-        <td>{t.size}{t.count > 1 ? ` (${t.count})` : ''}</td>
+        <td style={{ textAlign: 'left' }}>{t.time}</td>
+        <td style={{ textAlign: 'right' }}>{t.price.toFixed(2)}</td>
+        <td style={{ textAlign: 'right' }}>{t.size}{t.count > 1 ? ` (${t.count})` : ''}</td>
       </tr>
     ));
   }, [trades, largeThreshold]);
@@ -80,12 +80,12 @@ const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold,
         </div>
       </div>
       <div ref={containerRef} className="trades-list" onScroll={handleScroll}>
-        <table>
+        <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Price</th>
-              <th>Size</th>
+              <th style={{ textAlign: 'left' }}>Time</th>
+              <th style={{ textAlign: 'right' }}>Price</th>
+              <th style={{ textAlign: 'right' }}>Size</th>
             </tr>
           </thead>
           <tbody>

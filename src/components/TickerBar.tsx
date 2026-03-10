@@ -13,27 +13,38 @@ interface Props {
   onSelect: (symbol: string) => void;
 }
 
+// 1. Extract and Memoize TickerItem to prevent unnecessary re-renders
+const TickerItem = React.memo(({ ticker, isFocused, onClick }: { ticker: Ticker; isFocused: boolean; onClick: (s: string) => void }) => {
+  // 2. Verification: This log will show which specific symbols are re-rendering
+  // console.log(`[TickerItem] render ${ticker.symbol}`);
+
+  return (
+    <div
+      className={`ticker-item ${isFocused ? 'focused' : ''}`}
+      onClick={() => onClick(ticker.symbol)}
+    >
+      <span className="symbol">{ticker.symbol}</span>
+      <span className="last">{ticker.last.toFixed(2)}</span>
+      <span className={`change ${ticker.change24h >= 0 ? 'positive' : 'negative'}`}>
+        {ticker.change24h.toFixed(2)}%
+      </span>
+    </div>
+  );
+});
+
 const TickerBar: React.FC<Props> = React.memo(({ tickers, focused, onSelect }) => {
-  console.log('tickers-----', tickers);
   return (
     <div className="ticker-bar">
       {tickers.length === 0 ? (
         <span className="loading">loading tickers…</span>
       ) : (
         tickers.map((t) => (
-          <div
+          <TickerItem
             key={t.symbol}
-            className={`ticker-item ${focused === t.symbol ? 'focused' : ''}`}
-            onClick={() => {
-              onSelect(t.symbol);
-            }}
-          >
-            <span className="symbol">{t.symbol}</span>
-            <span className="last">{t.last.toFixed(2)}</span>
-            <span className={`change ${t.change24h >= 0 ? 'positive' : 'negative'}`}> 
-              {t.change24h.toFixed(2)}%
-            </span>
-          </div>
+            ticker={t}
+            isFocused={focused === t.symbol}
+            onClick={onSelect}
+          />
         ))
       )}
     </div>

@@ -3,15 +3,43 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService } from '../ws/WebSocketService';
 import { groupingOptionsFor } from '../constants';
 
+const eqLevels = (a: Level[], b: Level[]) =>
+  a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
+
+const computeFlash = (prev: Level[], curr: Level[]) => {
+  const flash: Record<number, 'up' | 'down'> = {};
+  const prevMap = new Map(prev.map((l) => [l.price, l.size]));
+  for (const lvl of curr) {
+    const old = prevMap.get(lvl.price) || 0;
+    if (old > 0) {
+      const diff = (lvl.size - old) / old;
+      if (diff >= 0.1) flash[lvl.price] = 'up';
+      else if (diff <= -0.1) flash[lvl.price] = 'down';
+    }
+  }
+  return flash;
+};
+
+const computeCumulative = (levels: Level[]): Level[] => {
+  let cum = 0;
+  return levels.map((l) => ({ ...l, cumulative: (cum += l.size) }));
+};
+
+const groupLevels = (levels: Level[], increment: number, isBid: boolean): Level[] => {
+  const map = new Map<number, number>();
+  for (const lvl of levels) {
+    const price = isBid ? Math.floor(lvl.price / increment) * increment : Math.ceil(lvl.price / increment) * increment;
+    map.set(price, (map.get(price) || 0) + lvl.size);
+  }
+  const arr = Array.from(map.entries()).map(([price, size]) => ({ price, size, cumulative: 0 }));
+  arr.sort((a, b) => (isBid ? b.price - a.price : a.price - b.price));
+  return computeCumulative(arr);
+};
 export interface Level {
   price: number;
   size: number;
   cumulative: number;
 }
-
-// Move helper outside to ensure stability and access
-const eqLevels = (a: Level[], b: Level[]) =>
-  a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
 
 export interface OrderbookState {
   bids: Level[];
@@ -43,89 +71,82 @@ export function useOrderBook(symbol: string): OrderbookState {
     imbalance?: number;
   }>({});
 
-  const flashBidsRef = useRef<Record<number, 'up' | 'down'>>({});
-  const flashAsksRef = useRef<Record<number, 'up' | 'down'>>({});
+  // We store flash in state now because it comes from the worker
+  const [flashes, setFlashes] = useState<{
+    bids: Record<number, 'up' | 'down'>;
+    asks: Record<number, 'up' | 'down'>;
+  }>({ bids: {}, asks: {} });
+
+  // rAF optimization refs
+  const rawBidsRef = useRef<Level[]>([]);
+  const rawAsksRef = useRef<Level[]>([]);
+  const latestRawDataRef = useRef<{ bids: Level[]; asks: Level[] } | null>(null);
+  const animationFrameIdRef = useRef<number | null>(null);
+
   const prevGroupedBidsRef = useRef<Level[]>([]);
   const prevGroupedAsksRef = useRef<Level[]>([]);
 
-  // compute cumulative sums
-  const computeCumulative = (levels: Level[]): Level[] => {
-    let cum = 0;
-    return levels.map((l) => ({ ...l, cumulative: (cum += l.size) }));
+  const calcDerived = (gb: Level[], ga: Level[], bestBid: number, bestAsk: number) => {
+    const mid = (bestBid + bestAsk) / 2;
+    const sp = bestAsk - bestBid;
+    const bidVol = gb.length > 0 ? gb[gb.length - 1].cumulative : 0;
+    const askVol = ga.length > 0 ? ga[ga.length - 1].cumulative : 0;
+    return {
+      midPrice: mid,
+      spread: sp,
+      spreadBps: mid > 0 ? (sp / mid) * 10000 : 0,
+      imbalance: bidVol / (askVol || 1),
+    };
   };
 
-  const groupLevels = (levels: Level[], increment: number, isBid: boolean): Level[] => {
-    const map = new Map<number, number>();
-    for (const lvl of levels) {
-      const price = isBid
-        ? Math.floor(lvl.price / increment) * increment
-        : Math.ceil(lvl.price / increment) * increment;
-      map.set(price, (map.get(price) || 0) + lvl.size);
-    }
-    const arr = Array.from(map.entries()).map(([price, size]) => ({ price, size, cumulative: 0 }));
-    arr.sort((a, b) => (isBid ? b.price - a.price : a.price - b.price));
-    return computeCumulative(arr);
-  };
+  const throttledUpdate = useCallback(() => {
+    if (latestRawDataRef.current) {
+      const { bids, asks } = latestRawDataRef.current;
+      latestRawDataRef.current = null;
 
-  // compute derived values from raw or grouped data
-  // (separate effect to avoid cycles when grouped arrays change)
+      rawBidsRef.current = bids;
+      rawAsksRef.current = asks;
 
+      setRawBids(bids);
+      setRawAsks(asks);
 
-  // flash computation
-  const computeFlash = (prev: Level[], curr: Level[]) => {
-    const flash: Record<number, 'up' | 'down'> = {};
-    const prevMap = new Map(prev.map((l) => [l.price, l.size]));
-    for (const lvl of curr) {
-      const old = prevMap.get(lvl.price) || 0;
-      if (old > 0) {
-        const diff = (lvl.size - old) / old;
-        if (diff >= 0.1) flash[lvl.price] = 'up';
-        else if (diff <= -0.1) flash[lvl.price] = 'down';
+      const gb = groupLevels(bids, group, true);
+      const ga = groupLevels(asks, group, false);
+
+      const flashBids = computeFlash(prevGroupedBidsRef.current, gb);
+      const flashAsks = computeFlash(prevGroupedAsksRef.current, ga);
+
+      prevGroupedBidsRef.current = gb;
+      prevGroupedAsksRef.current = ga;
+
+      setGroupedBids(gb);
+      setGroupedAsks(ga);
+      setFlashes({ bids: flashBids, asks: flashAsks });
+
+      if (bids.length && asks.length) {
+        setDerived(calcDerived(gb, ga, bids[0].price, asks[0].price));
       }
     }
-    return flash;
-  };
+    animationFrameIdRef.current = null;
+  }, [group]);
 
-  // handle grouping whenever raw data or group changes
+  // Handle group changes
   useEffect(() => {
-    if (!symbol) return;
-    const gb = groupLevels(rawBids, group, true);
-    const ga = groupLevels(rawAsks, group, false);
+    const bids = rawBidsRef.current;
+    const asks = rawAsksRef.current;
+    if (!bids.length && !asks.length) return;
 
-    // only update state if the grouped arrays actually changed (avoids
-    // triggering a rerender which would re‑run this effect immediately)
-    setGroupedBids((prev) => (eqLevels(prev, gb) ? prev : gb));
-    setGroupedAsks((prev) => (eqLevels(prev, ga) ? prev : ga));
+    const gb = groupLevels(bids, group, true);
+    const ga = groupLevels(asks, group, false);
 
-    // compute flash based on previous grouped data
-    const bidFlash: Record<number, 'up' | 'down'> = {};
-    const bidPrevMap = new Map(prevGroupedBidsRef.current.map((l) => [l.price, l.size]));
-    for (const lvl of gb) {
-      const old = bidPrevMap.get(lvl.price) || 0;
-      if (old > 0) {
-        const diff = (lvl.size - old) / old;
-        if (diff >= 0.1) bidFlash[lvl.price] = 'up';
-        else if (diff <= -0.1) bidFlash[lvl.price] = 'down';
-      }
+    setGroupedBids(gb);
+    setGroupedAsks(ga);
+    setFlashes({ bids: {}, asks: {} }); // Reset flashes on group change
+
+    if (bids.length && asks.length) {
+      setDerived(calcDerived(gb, ga, bids[0].price, asks[0].price));
     }
-    flashBidsRef.current = bidFlash;
-
-    const askFlash: Record<number, 'up' | 'down'> = {};
-    const askPrevMap = new Map(prevGroupedAsksRef.current.map((l) => [l.price, l.size]));
-    for (const lvl of ga) {
-      const old = askPrevMap.get(lvl.price) || 0;
-      if (old > 0) {
-        const diff = (lvl.size - old) / old;
-        if (diff >= 0.1) askFlash[lvl.price] = 'up';
-        else if (diff <= -0.1) askFlash[lvl.price] = 'down';
-      }
-    }
-    flashAsksRef.current = askFlash;
-
-    // store current for next round
-    prevGroupedBidsRef.current = gb;
-    prevGroupedAsksRef.current = ga;
-  }, [rawBids, rawAsks, group]);
+  }, [group]);
 
   const handleMessage = useCallback((msg: any) => {
     // console.log('handleMessage----', msg)
@@ -133,17 +154,17 @@ export function useOrderBook(symbol: string): OrderbookState {
     const msgSym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
     const targetSym = symbol.toUpperCase();
     if (msg.type === 'l2_orderbook' && msgSym === targetSym) {
-      const convert = (arr: any[]) => {
-        return arr.map(([p, s]: any) => ({ price: Number(p), size: Number(s), cumulative: 0 }));
-      };
+      const convert = (arr: any[]) => arr.map(([p, s]: any) => ({ price: Number(p), size: Number(s), cumulative: 0 }));
       const bids = convert(msg.bids);
       bids.sort((a, b) => b.price - a.price);
       const asks = convert(msg.asks);
       asks.sort((a, b) => a.price - b.price);
-      setRawBids(bids);
-      setRawAsks(asks);
+      latestRawDataRef.current = { bids, asks };
+      if (!animationFrameIdRef.current) {
+        animationFrameIdRef.current = requestAnimationFrame(throttledUpdate);
+      }
     }
-  }, [symbol]);
+  }, [symbol, throttledUpdate]);
 
   useEffect(() => {
     if (!symbol) return;
@@ -152,26 +173,12 @@ export function useOrderBook(symbol: string): OrderbookState {
     return () => {
       wsService.removeHandler(handleMessage);
       wsService.unsubscribe('l2_orderbook', symbol);
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
     };
   }, [symbol, handleMessage]);
-
-  // compute derived metrics when raw or grouped data updates
-  useEffect(() => {
-    if (rawBids.length && rawAsks.length) {
-      const bestBid = rawBids[0].price;
-      const bestAsk = rawAsks[0].price;
-      const mid = (bestBid + bestAsk) / 2;
-      const sp = bestAsk - bestBid;
-      const bidVol = groupedBids.reduce((s, l) => s + l.size, 0);
-      const askVol = groupedAsks.reduce((s, l) => s + l.size, 0);
-      setDerived({
-        midPrice: mid,
-        spread: sp,
-        spreadBps: (sp / mid) * 10000,
-        imbalance: bidVol / (askVol || 1),
-      });
-    }
-  }, [rawBids, rawAsks, groupedBids, groupedAsks]);
 
   // update grouping options when symbol changes
   useEffect(() => {
@@ -185,6 +192,8 @@ export function useOrderBook(symbol: string): OrderbookState {
     // clear previous book when switching symbols to avoid visual artifacts
     setRawBids([]);
     setRawAsks([]);
+    setGroupedBids([]);
+    setGroupedAsks([]);
   }, [symbol]);
 
   // save group changes
@@ -205,7 +214,7 @@ export function useOrderBook(symbol: string): OrderbookState {
     imbalance: derived.imbalance,
     setGroup,
     group,
-    flashBids: flashBidsRef.current,
-    flashAsks: flashAsksRef.current,
+    flashBids: flashes.bids,
+    flashAsks: flashes.asks,
   };
 }
