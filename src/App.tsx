@@ -34,8 +34,6 @@ function App() {
   // hooks that manage live data
   const tickers = useTickers();
   const {
-    bids,
-    asks,
     groupedBids,
     groupedAsks,
     midPrice,
@@ -75,8 +73,6 @@ function App() {
         <div className="panel orderbook-panel">
           <h2>{focused} Order Book</h2>
           <OrderBook
-            bids={bids}
-            asks={asks}
             groupedBids={groupedBids}
             groupedAsks={groupedAsks}
             midPrice={midPrice}

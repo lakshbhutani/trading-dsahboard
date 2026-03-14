@@ -31,6 +31,30 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   const tradesWindowRef = useRef<RawTrade[]>([]);
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Separate stats calculation to run every second (per requirements)
+  // This ensures stats decay even if no new trades come in.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const cutoff = now - 60000;
+
+      // Filter old trades
+      tradesWindowRef.current = tradesWindowRef.current.filter((t) => t.timestamp > cutoff);
+
+      const win = tradesWindowRef.current;
+      const buyTrades = win.filter((t) => t.side === 'buy');
+      const sellTrades = win.filter((t) => t.side === 'sell');
+      const buyVolume = buyTrades.reduce((sum, t) => sum + t.size, 0);
+      const sellVolume = sellTrades.reduce((sum, t) => sum + t.size, 0);
+      const count = win.length;
+      const avgSize = count > 0 ? win.reduce((sum, t) => sum + t.size, 0) / count : 0;
+
+      setStats({ buyVolume, sellVolume, count, avgSize });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const flushTrades = useCallback(() => {
     const pending = pendingTradesRef.current;
     if (pending.length === 0) {
@@ -38,23 +62,8 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       return;
     }
 
-    const now = Date.now();
-    const cutoff = now - 60000;
-
     // 1. Update Rolling Window (for stats)
     tradesWindowRef.current.push(...pending);
-    // Filter old trades (ensure timestamp is in ms)
-    tradesWindowRef.current = tradesWindowRef.current.filter(t => t.timestamp > cutoff);
-
-    // Calculate Stats
-    const buyTrades = tradesWindowRef.current.filter(t => t.side === 'buy');
-    const sellTrades = tradesWindowRef.current.filter(t => t.side === 'sell');
-    const buyVolume = buyTrades.reduce((sum, t) => sum + t.size, 0);
-    const sellVolume = sellTrades.reduce((sum, t) => sum + t.size, 0);
-    const count = tradesWindowRef.current.length;
-    const avgSize = count > 0 ? tradesWindowRef.current.reduce((sum, t) => sum + t.size, 0) / count : 0;
-
-    setStats({ buyVolume, sellVolume, count, avgSize });
 
     // 2. Aggregate Pending Trades (for display)
     const merged = new Map<string, AggTrade>();

@@ -8,8 +8,6 @@ interface Level {
 }
 
 interface Props {
-  bids: Level[];
-  asks: Level[];
   groupedBids: Level[];
   groupedAsks: Level[];
   midPrice?: number;
@@ -24,8 +22,6 @@ interface Props {
 }
 
 const OrderBook: React.FC<Props> = React.memo(({
-  bids,
-  asks,
   groupedBids,
   groupedAsks,
   midPrice,
@@ -83,7 +79,7 @@ const OrderBook: React.FC<Props> = React.memo(({
           </thead>
           <tbody>
             {groupedAsks.length === 0 ? (
-              <tr><td colSpan={3}>no data</td></tr>
+              <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading...</td></tr>
             ) : (
               groupedAsks.slice(0, VISIBLE_ROWS).map((a) => {
                 const pct = maxAskCum ? (a.cumulative / maxAskCum) * 100 : 0;
@@ -116,7 +112,7 @@ const OrderBook: React.FC<Props> = React.memo(({
           </thead>
           <tbody>
             {groupedBids.length === 0 ? (
-              <tr><td colSpan={3}>no data</td></tr>
+              <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading...</td></tr>
             ) : (
               groupedBids.slice(0, VISIBLE_ROWS).map((b) => {
                 const pct = maxBidCum ? (b.cumulative / maxBidCum) * 100 : 0;

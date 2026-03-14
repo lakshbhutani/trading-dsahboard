@@ -3,9 +3,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService } from '../ws/WebSocketService';
 import { groupingOptionsFor } from '../constants';
 
-const eqLevels = (a: Level[], b: Level[]) =>
-  a.length === b.length && a.every((l, i) => l.price === b[i].price && l.size === b[i].size);
-
 const computeFlash = (prev: Level[], curr: Level[]) => {
   const flash: Record<number, 'up' | 'down'> = {};
   const prevMap = new Map(prev.map((l) => [l.price, l.size]));
@@ -42,8 +39,6 @@ export interface Level {
 }
 
 export interface OrderbookState {
-  bids: Level[];
-  asks: Level[];
   groupedBids: Level[];
   groupedAsks: Level[];
   midPrice?: number;
@@ -57,8 +52,6 @@ export interface OrderbookState {
 }
 
 export function useOrderBook(symbol: string): OrderbookState {
-  const [rawBids, setRawBids] = useState<Level[]>([]);
-  const [rawAsks, setRawAsks] = useState<Level[]>([]);
   const [group, setGroup] = useState<number>(groupingOptionsFor(symbol)[0] || 1);
 
   const [groupedBids, setGroupedBids] = useState<Level[]>([]);
@@ -106,9 +99,6 @@ export function useOrderBook(symbol: string): OrderbookState {
 
       rawBidsRef.current = bids;
       rawAsksRef.current = asks;
-
-      setRawBids(bids);
-      setRawAsks(asks);
 
       const gb = groupLevels(bids, group, true);
       const ga = groupLevels(asks, group, false);
@@ -190,10 +180,10 @@ export function useOrderBook(symbol: string): OrderbookState {
       setGroup(opts[0] || 1);
     }
     // clear previous book when switching symbols to avoid visual artifacts
-    setRawBids([]);
-    setRawAsks([]);
     setGroupedBids([]);
     setGroupedAsks([]);
+    setDerived({});
+    setFlashes({ bids: {}, asks: {} });
   }, [symbol]);
 
   // save group changes
@@ -204,8 +194,6 @@ export function useOrderBook(symbol: string): OrderbookState {
   }, [group, symbol]);
 
   return {
-    bids: rawBids,
-    asks: rawAsks,
     groupedBids,
     groupedAsks,
     midPrice: derived.midPrice,
