@@ -1,14 +1,58 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import ConnectionStatus from './components/ConnectionStatus';
-import TickerBar from './components/TickerBar';
-import OrderBook from './components/OrderBook';
-import TradesFeed from './components/TradesFeed';
+import TickerBarInternal from './components/TickerBar';
+import OrderBookInternal from './components/OrderBook';
+import TradesFeedInternal from './components/TradesFeed';
 import { wsService } from './ws/WebSocketService';
 import { useTickers } from './hooks/useTickers';
 import { useOrderBook } from './hooks/useOrderBook';
 import { useTrades } from './hooks/useTrades';
 import { groupingOptionsFor } from './constants';
 import './App.css';
+
+const TickerBar = React.memo(({ focused, onSelect }: { focused: string; onSelect: (s: string) => void }) => {
+  const tickers = useTickers();
+  return <TickerBarInternal tickers={tickers} focused={focused} onSelect={onSelect} />;
+});
+TickerBar.displayName = 'TickerBar';
+
+const OrderBook = React.memo(({ focused }: { focused: string }) => {
+  const {
+    groupedBids,
+    groupedAsks,
+    midPrice,
+    spread,
+    spreadBps,
+    imbalance,
+    setGroup,
+    group,
+    flashBids,
+    flashAsks,
+  } = useOrderBook(focused);
+
+  return (
+    <OrderBookInternal
+      groupedBids={groupedBids}
+      groupedAsks={groupedAsks}
+      midPrice={midPrice}
+      spread={spread}
+      spreadBps={spreadBps}
+      imbalance={imbalance}
+      group={group}
+      onGroupChange={setGroup}
+      groupOptions={groupingOptionsFor(focused)}
+      flashBids={flashBids}
+      flashAsks={flashAsks}
+    />
+  );
+});
+OrderBook.displayName = 'OrderBook';
+
+const TradesFeed = React.memo(({ focused, threshold, onThresholdChange }: { focused: string; threshold: number; onThresholdChange: (n: number) => void }) => {
+  const { aggTrades: trades, stats } = useTrades(focused, threshold);
+  return <TradesFeedInternal trades={trades} stats={stats} largeThreshold={threshold} onThresholdChange={onThresholdChange} />;
+});
+TradesFeed.displayName = 'TradesFeed';
 
 function App() {
   const [focused, setFocused] = useState<string>(() => {
@@ -31,25 +75,10 @@ function App() {
     };
   }, []);
 
-  // hooks that manage live data
-  const tickers = useTickers();
-  const {
-    groupedBids,
-    groupedAsks,
-    midPrice,
-    spread,
-    spreadBps,
-    imbalance,
-    setGroup,
-    group,
-    flashBids,
-    flashAsks,
-  } = useOrderBook(focused);
   const [threshold, setThreshold] = useState<number>(() => {
     const t = Number(localStorage.getItem('threshold'));
     return t || 10000;
   });
-  const { aggTrades: trades, stats } = useTrades(focused, threshold);
 
   useEffect(() => {
     localStorage.setItem('threshold', String(threshold));
@@ -64,36 +93,16 @@ function App() {
     <div className="App">
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <ConnectionStatus status={connStatus} />
-        {/* <pre style={{ color: '#0f0', fontSize: '10px' }}>
-          {JSON.stringify(wsService.getSubscriptions(), null, 2)}
-        </pre> */}
       </div>
-      <TickerBar tickers={tickers} focused={focused} onSelect={setFocused} />
+      <TickerBar focused={focused} onSelect={setFocused} />
       <div className="main-panel">
         <div className="panel orderbook-panel">
           <h2>{focused} Order Book</h2>
-          <OrderBook
-            groupedBids={groupedBids}
-            groupedAsks={groupedAsks}
-            midPrice={midPrice}
-            spread={spread}
-            spreadBps={spreadBps}
-            imbalance={imbalance}
-            group={group}
-            onGroupChange={setGroup}
-            groupOptions={groupingOptionsFor(focused)}
-            flashBids={flashBids}
-            flashAsks={flashAsks}
-          />
+          <OrderBook focused={focused} />
         </div>
         <div className="panel trades-panel" style={{ position: 'relative' }}>
           <h2>{focused} Trades</h2>
-          <TradesFeed
-            trades={trades}
-            stats={stats}
-            largeThreshold={threshold}
-            onThresholdChange={setThreshold}
-          />
+          <TradesFeed focused={focused} threshold={threshold} onThresholdChange={setThreshold} />
         </div>
       </div>
     </div>

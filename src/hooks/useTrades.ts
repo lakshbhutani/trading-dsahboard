@@ -12,6 +12,7 @@ export interface RawTrade {
 
 export interface AggTrade extends RawTrade {
   count: number;
+  id: string;
 }
 
 export interface RollingStats {
@@ -22,6 +23,9 @@ export interface RollingStats {
 }
 
 const AGG_WINDOW_MS = 100;
+const MAX_TRADES_WINDOW_SIZE = 500; // Cap to prevent unbounded memory growth
+let nextTradeId = 0; // Auto-incrementing ID for fast, zero-GC React keys
+
 
 export function useTrades(symbol: string, largeNotional = 10000) {
   const [aggTrades, setAggTrades] = useState<AggTrade[]>([]);
@@ -30,6 +34,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
   const pendingTradesRef = useRef<RawTrade[]>([]);
   const tradesWindowRef = useRef<RawTrade[]>([]);
   const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const mergedMapRef = useRef(new Map<string, Omit<AggTrade, 'id'>>());
 
   // Separate stats calculation to run every second (per requirements)
   // This ensures stats decay even if no new trades come in.
@@ -38,18 +43,40 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       const now = Date.now();
       const cutoff = now - 60000;
 
-      // Filter old trades
-      tradesWindowRef.current = tradesWindowRef.current.filter((t) => t.timestamp > cutoff);
-
+      // Trades are pushed chronologically, so we can find the first valid index
+      // instead of iterating through the entire array with .filter()
       const win = tradesWindowRef.current;
-      const buyTrades = win.filter((t) => t.side === 'buy');
-      const sellTrades = win.filter((t) => t.side === 'sell');
-      const buyVolume = buyTrades.reduce((sum, t) => sum + t.size, 0);
-      const sellVolume = sellTrades.reduce((sum, t) => sum + t.size, 0);
-      const count = win.length;
-      const avgSize = count > 0 ? win.reduce((sum, t) => sum + t.size, 0) / count : 0;
+      let startIdx = 0;
+      while (startIdx < win.length && win[startIdx].timestamp <= cutoff) {
+        startIdx++;
+      }
+      if (startIdx > 0) {
+        tradesWindowRef.current = win.slice(startIdx);
+      }
 
-      setStats({ buyVolume, sellVolume, count, avgSize });
+      const currentWin = tradesWindowRef.current;
+      let buyVolume = 0;
+      let sellVolume = 0;
+      
+      for (let i = 0; i < currentWin.length; i++) {
+        if (currentWin[i].side === 'buy') buyVolume += currentWin[i].size;
+        else sellVolume += currentWin[i].size;
+      }
+      const count = currentWin.length;
+      const avgSize = count > 0 ? (buyVolume + sellVolume) / count : 0;
+
+      setStats(prev => {
+        // Bail out of the React render cycle if the stats haven't changed
+        if (
+          prev.buyVolume === buyVolume &&
+          prev.sellVolume === sellVolume &&
+          prev.count === count &&
+          prev.avgSize === avgSize
+        ) {
+          return prev;
+        }
+        return { buyVolume, sellVolume, count, avgSize };
+      });
     }, 1000);
 
     return () => clearInterval(interval);
@@ -64,9 +91,12 @@ export function useTrades(symbol: string, largeNotional = 10000) {
 
     // 1. Update Rolling Window (for stats)
     tradesWindowRef.current.push(...pending);
+     if (tradesWindowRef.current.length > MAX_TRADES_WINDOW_SIZE) {
+      tradesWindowRef.current = tradesWindowRef.current.slice(-MAX_TRADES_WINDOW_SIZE);
+    }
 
     // 2. Aggregate Pending Trades (for display)
-    const merged = new Map<string, AggTrade>();
+    const merged = mergedMapRef.current;
     for (const t of pending) {
       const key = `${t.price}-${t.side}`;
       const existing = merged.get(key);
@@ -84,11 +114,15 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       }
     }
 
-    const newAggTrades = Array.from(merged.values());
-    // Prepend new trades to the list and limit to 500
-    setAggTrades(prev => [...newAggTrades, ...prev].slice(0, 500));
+    const newAggTrades: AggTrade[] = Array.from(merged.values()).map(t => ({
+      ...t,
+      id: String(nextTradeId++)
+    }));
+    // Prepend new trades to the list and limit to 50 for optimal DOM performance
+    setAggTrades(prev => [...newAggTrades, ...prev].slice(0, 80));
 
-    pendingTradesRef.current = [];
+    pendingTradesRef.current.length = 0; // Empty the array without allocating a new one
+    merged.clear(); // Clear the map to release references immediately
     flushTimerRef.current = null;
   }, []);
 
@@ -108,7 +142,8 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       // Normalize timestamp to milliseconds
       let ts = Number(msg.timestamp);
       if (!ts) ts = Date.now();
-      else if (ts > 1000000000000000) ts = ts / 1000; // microseconds -> ms
+      else if (ts > 1e17) ts = Math.floor(ts / 1000000); // nanoseconds -> ms
+      else if (ts > 1e14) ts = Math.floor(ts / 1000); // microseconds -> ms
 
       const raw: RawTrade = {
         time: new Date(ts).toISOString().substr(11, 12),
@@ -140,8 +175,9 @@ export function useTrades(symbol: string, largeNotional = 10000) {
       }
       setAggTrades([]);
       setStats({ buyVolume: 0, sellVolume: 0, count: 0, avgSize: 0 });
-      pendingTradesRef.current = [];
-      tradesWindowRef.current = [];
+      pendingTradesRef.current.length = 0;
+      tradesWindowRef.current.length = 0;
+      mergedMapRef.current.clear();
     };
   }, [symbol, handleMessage]);
 

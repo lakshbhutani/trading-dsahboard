@@ -21,6 +21,46 @@ interface Props {
   flashAsks: Record<number, 'up' | 'down'>;
 }
 
+const AskRow = React.memo(({ a, maxAskCum, flash }: { a: Level; maxAskCum: number; flash?: 'up' | 'down' }) => {
+  const rowRef = React.useRef<HTMLTableRowElement>(null);
+  const pct = maxAskCum ? (a.cumulative / maxAskCum) * 100 : 0;
+
+  React.useEffect(() => {
+    if (rowRef.current) {
+      rowRef.current.style.setProperty('--bar-width', `${pct}%`);
+    }
+  }, [pct]);
+
+  return (
+    <tr ref={rowRef} className={`ask-row ${flash === 'up' ? 'flash-up' : ''} ${flash === 'down' ? 'flash-down' : ''}`}>
+      <td style={{ textAlign: 'left' }}>{a.price.toFixed(2)}</td>
+      <td style={{ textAlign: 'right' }}>{a.size.toFixed(4)}</td>
+      <td style={{ textAlign: 'right' }}>{a.cumulative.toFixed(4)}</td>
+    </tr>
+  );
+});
+AskRow.displayName = 'AskRow';
+
+const BidRow = React.memo(({ b, maxBidCum, flash }: { b: Level; maxBidCum: number; flash?: 'up' | 'down' }) => {
+  const rowRef = React.useRef<HTMLTableRowElement>(null);
+  const pct = maxBidCum ? (b.cumulative / maxBidCum) * 100 : 0;
+
+  React.useEffect(() => {
+    if (rowRef.current) {
+      rowRef.current.style.setProperty('--bar-width', `${pct}%`);
+    }
+  }, [pct]);
+
+  return (
+    <tr ref={rowRef} className={`bid-row ${flash === 'up' ? 'flash-up' : ''} ${flash === 'down' ? 'flash-down' : ''}`}>
+      <td style={{ textAlign: 'left' }}>{b.price.toFixed(2)}</td>
+      <td style={{ textAlign: 'right' }}>{b.size.toFixed(4)}</td>
+      <td style={{ textAlign: 'right' }}>{b.cumulative.toFixed(4)}</td>
+    </tr>
+  );
+});
+BidRow.displayName = 'BidRow';
+
 const OrderBook: React.FC<Props> = React.memo(({
   groupedBids,
   groupedAsks,
@@ -81,26 +121,14 @@ const OrderBook: React.FC<Props> = React.memo(({
             {groupedAsks.length === 0 ? (
               <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading...</td></tr>
             ) : (
-              groupedAsks.slice(0, VISIBLE_ROWS).map((a) => {
-                const pct = maxAskCum ? (a.cumulative / maxAskCum) * 100 : 0;
-                return (
-                  <tr
-                    key={a.price}
-                    className={`ask-row ${flashAsks[a.price] === 'up' ? 'flash-up' : ''} ${
-                      flashAsks[a.price] === 'down' ? 'flash-down' : ''
-                    }`}
-                    style={{ '--bar-width': `${pct}%` } as any}
-                  >
-                    <td style={{ textAlign: 'left' }}>{a.price.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right' }}>{a.size.toFixed(4)}</td>
-                    <td style={{ textAlign: 'right' }}>{a.cumulative.toFixed(4)}</td>
-                  </tr>
-                );
-              })
+              groupedAsks.slice(0, VISIBLE_ROWS).map((a, idx) => (
+                <AskRow key={idx} a={a} maxAskCum={maxAskCum} flash={flashAsks[a.price]} />
+              ))
             )}
           </tbody>
         </table>
       </div>
+
       <div className="orderbook-bids">
         <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
           <thead>
@@ -114,22 +142,9 @@ const OrderBook: React.FC<Props> = React.memo(({
             {groupedBids.length === 0 ? (
               <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading...</td></tr>
             ) : (
-              groupedBids.slice(0, VISIBLE_ROWS).map((b) => {
-                const pct = maxBidCum ? (b.cumulative / maxBidCum) * 100 : 0;
-                return (
-                  <tr
-                    key={b.price}
-                    className={`bid-row ${flashBids[b.price] === 'up' ? 'flash-up' : ''} ${
-                      flashBids[b.price] === 'down' ? 'flash-down' : ''
-                    }`}
-                    style={{ '--bar-width': `${pct}%` } as any}
-                  >
-                    <td style={{ textAlign: 'left' }}>{b.price.toFixed(2)}</td>
-                    <td style={{ textAlign: 'right' }}>{b.size.toFixed(4)}</td>
-                    <td style={{ textAlign: 'right' }}>{b.cumulative.toFixed(4)}</td>
-                  </tr>
-                );
-              })
+              groupedBids.slice(0, VISIBLE_ROWS).map((b, idx) => (
+                <BidRow key={idx} b={b} maxBidCum={maxBidCum} flash={flashBids[b.price]} />
+              ))
             )}
           </tbody>
         </table>
@@ -137,5 +152,6 @@ const OrderBook: React.FC<Props> = React.memo(({
     </div>
   );
 });
+OrderBook.displayName = 'OrderBook';
 
 export default OrderBook;

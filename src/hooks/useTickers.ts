@@ -23,12 +23,17 @@ export function useTickers() {
       if (msg.symbol) {
         const sym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
         setTickers((prev) => {
-          const copy = [...prev];
-          const idx = copy.findIndex((t) => t.symbol === sym);
+          const idx = prev.findIndex((t) => t.symbol === sym);
           
-          const open = idx !== -1 ? copy[idx].open : last;
+          const open = idx !== -1 ? prev[idx].open : last;
           const change24h = ((last - open) / open) * 100;
           
+          // Bail out if the price hasn't actually moved to save CPU cycles
+          if (idx !== -1 && prev[idx].last === last && prev[idx].change24h === change24h) {
+            return prev;
+          }
+
+          const copy = [...prev];
           const entry: Ticker = { symbol: sym, last, change24h, open };
           if (idx === -1) copy.push(entry);
           else copy[idx] = entry;

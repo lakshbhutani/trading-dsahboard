@@ -10,6 +10,7 @@ interface AggTrade {
   side: 'buy' | 'sell';
   count: number;
   notional?: number;
+  id: string;
 }
 
 interface RollingStats {
@@ -25,6 +26,21 @@ interface Props {
   largeThreshold: number;
   onThresholdChange: (n: number) => void;
 }
+
+const TradeRow = React.memo(({ trade, largeThreshold }: { trade: AggTrade, largeThreshold: number }) => {
+  const notional = trade.notional ?? (trade.price * trade.size);
+  const isLarge = notional >= largeThreshold;
+  
+  return (
+    <tr
+      className={`${trade.side === 'buy' ? 'buy' : 'sell'} ${isLarge ? 'large' : ''}`}
+    >
+      <td style={{ textAlign: 'left' }}>{trade.time}</td>
+      <td style={{ textAlign: 'right' }}>{trade.price.toFixed(2)}</td>
+      <td style={{ textAlign: 'right' }}>{trade.size.toFixed(4)}{trade.count > 1 ? ` (${trade.count})` : ''}</td>
+    </tr>
+  );
+});
 
 const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold, onThresholdChange }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -47,24 +63,6 @@ const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold,
       setAutoScroll(false);
     }
   };
-
-  const renderedRows = React.useMemo(() => {
-    if (trades.length === 0) return <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading trades...</td></tr>;
-    return trades.map((t, idx) => {
-      // Use pre-calculated notional if available, otherwise compute it
-      const notional = t.notional ?? (t.price * t.size);
-      return (
-        <tr
-          key={idx}
-          className={`${t.side === 'buy' ? 'buy' : 'sell'} ${notional >= largeThreshold ? 'large' : ''}`}
-        >
-          <td style={{ textAlign: 'left' }}>{t.time}</td>
-          <td style={{ textAlign: 'right' }}>{t.price.toFixed(2)}</td>
-          <td style={{ textAlign: 'right' }}>{t.size.toFixed(4)}{t.count > 1 ? ` (${t.count})` : ''}</td>
-        </tr>
-      );
-    });
-  }, [trades, largeThreshold]);
 
   return (
     <div className="trades-feed">
@@ -95,7 +93,11 @@ const TradesFeed: React.FC<Props> = React.memo(({ trades, stats, largeThreshold,
             </tr>
           </thead>
           <tbody>
-          {renderedRows}
+            {trades.length === 0 ? (
+              <tr><td colSpan={3} style={{ textAlign: 'center', opacity: 0.5 }}>Loading trades...</td></tr>
+            ) : (
+              trades.map((t) => <TradeRow key={t.id} trade={t} largeThreshold={largeThreshold} />)
+            )}
       </tbody>
         </table>
       </div>

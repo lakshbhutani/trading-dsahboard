@@ -15,6 +15,7 @@ class WebSocketService {
   private subs: Subscription[] = [];
   private reconnectAttempts = 0;
   private statusHandlers: Set<(status: 'connected' | 'reconnecting' | 'disconnected') => void> = new Set();
+  private reconnectTimer: NodeJS.Timeout | null = null;
 
   connect(url: string) {
     if (this.socket) return;
@@ -53,13 +54,22 @@ class WebSocketService {
   private reconnect() {
     this.notifyStatus('reconnecting');
     const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
-    setTimeout(() => {
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++;
       if (this.url) this.connect(this.url);
     }, delay);
   }
 
   disconnect() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.socket?.close();
     this.socket = null;
   }
