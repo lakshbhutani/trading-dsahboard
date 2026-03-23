@@ -130,3 +130,14 @@ This design ensures the main thread is only concerned with rendering what is cur
 - **No List Virtualization**: The `OrderBook` and `TradesFeed` render a fixed number of DOM nodes. Performance will degrade on low-end devices or if the number of visible rows is increased significantly.
 - **Inefficient Stats Calculation**: The 60-second rolling stats in `useTrades` re-calculates from the full window every second instead of using a more efficient data structure like a deque for incremental updates.
 - **No Unit/Integration Tests**: The lack of a test suite makes the codebase fragile and difficult to refactor with confidence.
+
+## 7. Recent Performance Findings & Optimizations
+
+During profiling, a few critical performance bottlenecks were identified and resolved:
+
+- **Render Leakage (Root Cause: Top-Level State):** Initially, real-time hooks (`useTickers`, `useTrades`, `useOrderBook`) were called inside `App.tsx`. Every WebSocket message triggered a top-level state update, causing the entire component tree (including isolated panels) to re-render needlessly. 
+  - *Fix:* State was strictly co-located by extracting hooks into dedicated wrapper components. We also implemented strict value-equality bailouts in state setters (e.g., `setStats`) to completely cancel render cycles if the newly calculated data hadn't mathematically changed.
+- **DOM Thrashing in Order Book (Root Cause: Entity-based Keys):** Using `key={price}` for order book rows caused React to aggressively destroy and recreate DOM nodes whenever prices shifted.
+  - *Fix:* Switched to `key={idx}` for the fixed 25-row layout. This treats the UI as stable "slots," allowing React to bypass node creation and strictly mutate text content, drastically increasing frame rates.
+- **JS Heap & GC Spikes (Root Cause: High-Frequency Allocations):** The `useTrades` hook was generating unique React keys via `Math.random()` and allocating new `Map` and `Array` objects on every 100ms flush cycle, putting immense pressure on the Garbage Collector.
+  - *Fix:* Replaced expensive random string generation with a zero-cost auto-incrementing integer (`nextTradeId++`). Memory allocations were neutralized by persisting a module-level `Map` (reset via `.clear()`) and mutating arrays directly (via `.length = 0`).
