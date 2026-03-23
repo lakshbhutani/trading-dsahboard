@@ -26,6 +26,25 @@ const AGG_WINDOW_MS = 100;
 const MAX_TRADES_WINDOW_SIZE = 500; // Cap to prevent unbounded memory growth
 let nextTradeId = 0; // Auto-incrementing ID for fast, zero-GC React keys
 
+// Extracted pure function for testing trade aggregation
+export const aggregatePendingTrades = (pending: RawTrade[], merged: Map<string, Omit<AggTrade, 'id'>>) => {
+  for (const t of pending) {
+    const key = `${t.price}-${t.side}`;
+    const existing = merged.get(key);
+    if (existing) {
+      existing.size += t.size;
+      existing.notional += t.notional;
+      existing.count += 1;
+      // keep latest timestamp
+      if (t.timestamp > existing.timestamp) {
+        existing.time = t.time;
+        existing.timestamp = t.timestamp;
+      }
+    } else {
+      merged.set(key, { ...t, count: 1 });
+    }
+  }
+};
 
 export function useTrades(symbol: string, largeNotional = 10000) {
   const [aggTrades, setAggTrades] = useState<AggTrade[]>([]);
@@ -97,22 +116,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
 
     // 2. Aggregate Pending Trades (for display)
     const merged = mergedMapRef.current;
-    for (const t of pending) {
-      const key = `${t.price}-${t.side}`;
-      const existing = merged.get(key);
-      if (existing) {
-        existing.size += t.size;
-        existing.notional += t.notional;
-        existing.count += 1;
-        // keep latest timestamp
-        if (t.timestamp > existing.timestamp) {
-          existing.time = t.time;
-          existing.timestamp = t.timestamp;
-        }
-      } else {
-        merged.set(key, { ...t, count: 1 });
-      }
-    }
+    aggregatePendingTrades(pending, merged);
 
     const newAggTrades: AggTrade[] = Array.from(merged.values()).map(t => ({
       ...t,

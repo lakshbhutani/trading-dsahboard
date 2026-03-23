@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { wsService } from '../ws/WebSocketService';
 import { groupingOptionsFor } from '../constants';
 
-const computeFlash = (prev: Level[], curr: Level[]) => {
+export const computeFlash = (prev: Level[], curr: Level[]) => {
   const flash: Record<number, 'up' | 'down'> = {};
   const prevMap = new Map(prev.map((l) => [l.price, l.size]));
   for (const lvl of curr) {
@@ -17,12 +17,12 @@ const computeFlash = (prev: Level[], curr: Level[]) => {
   return flash;
 };
 
-const computeCumulative = (levels: Level[]): Level[] => {
+export const computeCumulative = (levels: Level[]): Level[] => {
   let cum = 0;
   return levels.map((l) => ({ ...l, cumulative: (cum += l.size) }));
 };
 
-const groupLevels = (levels: Level[], increment: number, isBid: boolean): Level[] => {
+export const groupLevels = (levels: Level[], increment: number, isBid: boolean): Level[] => {
   const map = new Map<number, number>();
   for (const lvl of levels) {
     const price = isBid ? Math.floor(lvl.price / increment) * increment : Math.ceil(lvl.price / increment) * increment;
