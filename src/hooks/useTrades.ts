@@ -52,7 +52,7 @@ export function useTrades(symbol: string, largeNotional = 10000) {
 
   const pendingTradesRef = useRef<RawTrade[]>([]);
   const tradesWindowRef = useRef<RawTrade[]>([]);
-  const flushTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mergedMapRef = useRef(new Map<string, Omit<AggTrade, 'id'>>());
 
   // Separate stats calculation to run every second (per requirements)

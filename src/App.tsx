@@ -4,17 +4,11 @@ import TickerBarInternal from './components/TickerBar';
 import OrderBookInternal from './components/OrderBook';
 import TradesFeedInternal from './components/TradesFeed';
 import { wsService } from './ws/WebSocketService';
-import { useTickers } from './hooks/useTickers';
+import { useTickerStream } from './hooks/useTickers';
 import { useOrderBook } from './hooks/useOrderBook';
 import { useTrades } from './hooks/useTrades';
 import { groupingOptionsFor } from './constants';
 import './App.css';
-
-const TickerBar = React.memo(({ focused, onSelect }: { focused: string; onSelect: (s: string) => void }) => {
-  const tickers = useTickers();
-  return <TickerBarInternal tickers={tickers} focused={focused} onSelect={onSelect} />;
-});
-TickerBar.displayName = 'TickerBar';
 
 const OrderBook = React.memo(({ focused }: { focused: string }) => {
   const {
@@ -55,6 +49,8 @@ const TradesFeed = React.memo(({ focused, threshold, onThresholdChange }: { focu
 TradesFeed.displayName = 'TradesFeed';
 
 function App() {
+  useTickerStream();
+
   const [focused, setFocused] = useState<string>(() => {
     try {
       return localStorage.getItem('focused') || 'BTCUSD';
@@ -91,18 +87,20 @@ function App() {
 
   return (
     <div className="App">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <ConnectionStatus status={connStatus} />
-      </div>
-      <TickerBar focused={focused} onSelect={setFocused} />
+      <ConnectionStatus status={connStatus} />
+      <TickerBarInternal focused={focused} onSelect={setFocused} />
       <div className="main-panel">
         <div className="panel orderbook-panel">
           <h2>{focused} Order Book</h2>
           <OrderBook focused={focused} />
         </div>
-        <div className="panel trades-panel" style={{ position: 'relative' }}>
+        <div className="panel trades-panel" style={{ position: "relative" }}>
           <h2>{focused} Trades</h2>
-          <TradesFeed focused={focused} threshold={threshold} onThresholdChange={setThreshold} />
+          <TradesFeed
+            focused={focused}
+            threshold={threshold}
+            onThresholdChange={setThreshold}
+          />
         </div>
       </div>
     </div>

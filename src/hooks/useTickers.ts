@@ -1,56 +1,78 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { wsService } from '../ws/WebSocketService';
 import { SYMBOL_PRECISION } from '../constants';
 
-interface Ticker {
+export interface Ticker {
   symbol: string;
   last: number;
   change24h: number;
   open: number;
 }
 
+const tickerChannel = 'v2/ticker' as const;
+export const tickerSymbols = Object.keys(SYMBOL_PRECISION);
 
-export function useTickers() {
-  const [tickers, setTickers] = useState<Ticker[]>([]);
+const tickerMap = new Map<string, Ticker>();
+const listenersBySymbol = new Map<string, Set<(ticker: Ticker | null) => void>>();
 
-  const handleMessage = useCallback((msg: any) => {
-    const isTicker = msg.type === 'v2/ticker';
+function subscribe(symbol: string, listener: (ticker: Ticker | null) => void) {
+  let listeners = listenersBySymbol.get(symbol);
+  if (!listeners) {
+    listeners = new Set();
+    listenersBySymbol.set(symbol, listeners);
+  }
 
-    if (isTicker) {
-      const last = Number(msg.last_price);
-      if (isNaN(last)) return;
+  listeners.add(listener);
+  listener(tickerMap.get(symbol) ?? null);
 
-      if (msg.symbol) {
-        const sym = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : msg.symbol;
-        setTickers((prev) => {
-          const idx = prev.findIndex((t) => t.symbol === sym);
-          
-          const open = idx !== -1 ? prev[idx].open : last;
-          const change24h = ((last - open) / open) * 100;
-          
-          // Bail out if the price hasn't actually moved to save CPU cycles
-          if (idx !== -1 && prev[idx].last === last && prev[idx].change24h === change24h) {
-            return prev;
-          }
-
-          const copy = [...prev];
-          const entry: Ticker = { symbol: sym, last, change24h, open };
-          if (idx === -1) copy.push(entry);
-          else copy[idx] = entry;
-          return copy;
-        });
-      }
+  return () => {
+    listeners!.delete(listener);
+    if (listeners!.size === 0) {
+      listenersBySymbol.delete(symbol);
     }
-  }, []);
+  };
+}
+
+function handleTickerMessage(msg: any) {
+  if (msg.type !== tickerChannel) return;
+
+  const last = Number(msg.last_price);
+  if (Number.isNaN(last) || !msg.symbol) return;
+
+  const symbol = typeof msg.symbol === 'string' ? msg.symbol.toUpperCase() : String(msg.symbol);
+  const prev = tickerMap.get(symbol);
+  const open = prev ? prev.open : last;
+  const change24h = open === 0 ? 0 : ((last - open) / open) * 100;
+
+  if (prev && prev.last === last && prev.change24h === change24h) {
+    return;
+  }
+
+  const next: Ticker = { symbol, last, change24h, open };
+  tickerMap.set(symbol, next);
+  const listeners = listenersBySymbol.get(symbol);
+  if (listeners) {
+    listeners.forEach((listener) => listener(next));
+  }
+}
+
+export function useTicker(symbol: string) {
+  const [ticker, setTicker] = useState<Ticker | null>(() => tickerMap.get(symbol) ?? null);
 
   useEffect(() => {
-    wsService.addHandler(handleMessage);
-    const symbols = Object.keys(SYMBOL_PRECISION);
-    wsService.subscribe('v2/ticker', symbols);
+    return subscribe(symbol, setTicker);
+  }, [symbol]);
+
+  return ticker;
+}
+
+export function useTickerStream() {
+  useEffect(() => {
+    wsService.addHandler(handleTickerMessage);
+    wsService.subscribe(tickerChannel, tickerSymbols);
     return () => {
-      wsService.unsubscribe('v2/ticker', symbols);
-      wsService.removeHandler(handleMessage);
+      wsService.unsubscribe(tickerChannel, tickerSymbols);
+      wsService.removeHandler(handleTickerMessage);
     };
-  }, [handleMessage]);
-  return tickers;
+  }, []);
 }

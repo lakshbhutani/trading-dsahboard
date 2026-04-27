@@ -15,7 +15,7 @@ class WebSocketService {
   private subs: Subscription[] = [];
   private reconnectAttempts = 0;
   private statusHandlers: Set<(status: 'connected' | 'reconnecting' | 'disconnected') => void> = new Set();
-  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   connect(url: string) {
     if (this.socket) return;
